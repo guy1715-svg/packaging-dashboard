@@ -89,27 +89,56 @@ def cost_per_box(box, entity, qty):
     }
 
 
-def build_quote_rows(product, boxes, entity, use_best_orientation=True):
+def weight_cap_qty(box, unit_weight_g):
+    """
+    무게 제한 기준 박스당 최대 적재 수량.
+
+        무게 한도 개수 = ⌊박스 허용중량(kg) × 1000 ÷ 제품 1개 무게(g)⌋
+
+    unit_weight_g <= 0 이면 무게 제한 없음(None) 으로 처리합니다.
+    """
+    if not unit_weight_g or unit_weight_g <= 0:
+        return None
+    return max(math.floor(box["max_weight_kg"] * 1000 / unit_weight_g), 0)
+
+
+def build_quote_rows(product, boxes, entity, use_best_orientation=True, unit_weight_g=0.0):
     """
     선택된 포장 방식/법인의 모든 박스에 대해 견적 행(row) 리스트를 생성.
     UI 표시 및 Excel/PDF 내보내기에 공통으로 사용됩니다.
+
+    unit_weight_g > 0 이면 무게 제한을 반영:
+        최종 적재수량 = MIN(부피 기준 개수, 무게 기준 개수)
     """
     rows = []
     for box in boxes:
         if use_best_orientation:
-            qty, grid, orient = loading_qty_best_orientation(product, box)
+            vol_qty, grid, orient = loading_qty_best_orientation(product, box)
         else:
-            qty, grid = loading_qty_axis_aligned(product, box)
+            vol_qty, grid = loading_qty_axis_aligned(product, box)
             orient = product
 
+        # 무게 제한 적용 → 최종 적재수량 & 제한 요인 판정
+        w_cap = weight_cap_qty(box, unit_weight_g)
+        if w_cap is not None and w_cap < vol_qty:
+            qty = w_cap
+            limit_factor = "무게 제한"
+        else:
+            qty = vol_qty
+            limit_factor = "부피 제한" if unit_weight_g else "-"
+
+        total_weight_kg = round(qty * unit_weight_g / 1000, 2) if unit_weight_g else 0.0
         eff = volume_efficiency(orient, box, qty)
         cost = cost_per_box(box, entity, qty)
 
         rows.append({
             "박스 모델": box["model"],
             "박스 내경(L×W×H)": f'{box["inner_l"]}×{box["inner_w"]}×{box["inner_h"]}',
+            "허용중량(kg)": box["max_weight_kg"],
             "적재 배열(nL×nW×nH)": f"{grid[0]}×{grid[1]}×{grid[2]}",
             "박스당 적재수량": qty,
+            "제한 요인": limit_factor,
+            "박스 총중량(kg)": total_weight_kg,
             "부피효율(%)": eff,
             "박스 단가": cost["box_cost"],
             "포장 인건비(가중)": cost["weighted_labor"],
