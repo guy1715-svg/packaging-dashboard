@@ -81,8 +81,8 @@ with st.sidebar:
 # 메인 - 계산
 # ---------------------------------------------------------------------------
 boxes = BOX_CATALOG[method][entity["code"]]
-rows = build_quote_rows(product, boxes, entity,
-                        use_best_orientation=use_best, unit_weight_g=unit_weight_g)
+rows = build_quote_rows(product, boxes, entity, use_best_orientation=use_best,
+                        unit_weight_g=unit_weight_g, part_name=part_name)
 
 # 요약 지표
 top = st.columns(4)
@@ -91,7 +91,7 @@ top[1].metric("포장 방식", method)
 top[2].metric("제품 사이즈", f"{pl:g}×{pw:g}×{ph:g}")
 best_row = max(rows, key=lambda r: r["박스당 적재수량"]) if rows else None
 top[3].metric("최대 적재수량 / 박스",
-              f'{best_row["박스당 적재수량"]:,} ({best_row["박스 모델"]})' if best_row else "0")
+              f'{best_row["박스당 적재수량"]:,} ({best_row["박스명"]})' if best_row else "0")
 
 st.divider()
 
@@ -117,7 +117,7 @@ with tab_calc:
                     format="%.1f%%", min_value=0, max_value=100),
             },
         )
-        st.bar_chart(df.set_index("박스 모델")["박스당 적재수량"])
+        st.bar_chart(df.set_index("박스명")["박스당 적재수량"])
         st.info("적재 공식:  n = ⌊박스내경 ÷ 제품외경⌋ 을 L·W·H 각 축에 적용 후 곱셈  "
                 "(⌊ ⌋ = 내림).  '최적 방향' ON 시 6가지 회전 중 최대값을 채택합니다.")
         if unit_weight_g:
