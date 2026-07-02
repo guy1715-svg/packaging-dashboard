@@ -102,13 +102,15 @@ def weight_cap_qty(box, unit_weight_g):
     return max(math.floor(box["max_weight_kg"] * 1000 / unit_weight_g), 0)
 
 
-def build_quote_rows(product, boxes, entity, use_best_orientation=True, unit_weight_g=0.0):
+def build_quote_rows(product, boxes, entity, use_best_orientation=True,
+                     unit_weight_g=0.0, part_name=""):
     """
     선택된 포장 방식/법인의 모든 박스에 대해 견적 행(row) 리스트를 생성.
     UI 표시 및 Excel/PDF 내보내기에 공통으로 사용됩니다.
 
     unit_weight_g > 0 이면 무게 제한을 반영:
         최종 적재수량 = MIN(부피 기준 개수, 무게 기준 개수)
+    part_name 은 각 행의 '품명' 열로 표기됩니다.
     """
     rows = []
     for box in boxes:
@@ -132,7 +134,8 @@ def build_quote_rows(product, boxes, entity, use_best_orientation=True, unit_wei
         cost = cost_per_box(box, entity, qty)
 
         rows.append({
-            "박스 모델": box["model"],
+            "품명": part_name if part_name else "-",
+            "박스명": box["model"],
             "박스 내경(L×W×H)": f'{box["inner_l"]}×{box["inner_w"]}×{box["inner_h"]}',
             "허용중량(kg)": box["max_weight_kg"],
             "적재 배열(nL×nW×nH)": f"{grid[0]}×{grid[1]}×{grid[2]}",
