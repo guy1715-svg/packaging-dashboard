@@ -174,13 +174,17 @@ def to_pdf_bytes(header_info, rows):
     return buf.getvalue()
 
 
-def default_header_info(entity_name, entity, method, product):
+def default_header_info(entity_name, entity, method, product,
+                        part_name="", unit_weight_g=0.0):
     """견적서 상단 메타 정보 표준 생성."""
-    return {
+    info = {
+        "품명": part_name if part_name else "-",
         "대상 법인": f'{entity_name} ({entity["code"]})',
         "포장 방식": method,
         "제품 사이즈(L×W×H mm)": f"{product[0]}×{product[1]}×{product[2]}",
+        "제품 1개 무게(g)": f"{unit_weight_g:g}" if unit_weight_g else "-",
         "견적 통화": entity["quote_currency"],
         "작성일": str(date.today()),
         "작성 부서": "개발팀 (R&D / Packaging)",
     }
+    return info
