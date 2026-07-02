@@ -40,6 +40,9 @@ with st.sidebar:
     entity_name = st.selectbox("대상 법인", list(ENTITIES.keys()))
     method = st.radio("포장 방식", PACKAGING_METHODS, horizontal=True)
 
+    part_name = st.text_input("품명 (제품명/품번)", value="",
+                              placeholder="예: SW-CONN-0250")
+
     st.markdown("**제품 외경 (mm)**")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -49,6 +52,11 @@ with st.sidebar:
     with c3:
         ph = st.number_input("H", min_value=0.1, value=15.0, step=1.0)
     product = (pl, pw, ph)
+
+    unit_weight_g = st.number_input(
+        "제품 1개 무게 (g)", min_value=0.0, value=0.0, step=1.0,
+        help="0으로 두면 무게 제한 없이 부피만으로 계산합니다. "
+             "값을 넣으면 박스 허용중량을 초과하지 않도록 적재수량을 제한합니다.")
 
     use_best = st.toggle("최적 방향(회전) 적재 사용", value=True,
                          help="제품을 6방향으로 놓아보고 최대 적재수량을 계산합니다. "
@@ -73,7 +81,8 @@ with st.sidebar:
 # 메인 - 계산
 # ---------------------------------------------------------------------------
 boxes = BOX_CATALOG[method][entity["code"]]
-rows = build_quote_rows(product, boxes, entity, use_best_orientation=use_best)
+rows = build_quote_rows(product, boxes, entity,
+                        use_best_orientation=use_best, unit_weight_g=unit_weight_g)
 
 # 요약 지표
 top = st.columns(4)
@@ -111,11 +120,17 @@ with tab_calc:
         st.bar_chart(df.set_index("박스 모델")["박스당 적재수량"])
         st.info("적재 공식:  n = ⌊박스내경 ÷ 제품외경⌋ 을 L·W·H 각 축에 적용 후 곱셈  "
                 "(⌊ ⌋ = 내림).  '최적 방향' ON 시 6가지 회전 중 최대값을 채택합니다.")
+        if unit_weight_g:
+            st.info("무게 반영:  최종 적재수량 = MIN(부피 기준 개수, 무게 기준 개수).  "
+                    "'제한 요인' 열에서 무게·부피 중 무엇이 한계였는지 확인할 수 있습니다.")
+        else:
+            st.caption("💡 사이드바에 '제품 1개 무게(g)'를 입력하면 박스 허용중량까지 반영해 더 정확히 계산합니다.")
 
 # --- 탭2: 견적 양식 + 다운로드 ---
 with tab_form:
     st.subheader("구매팀 전달용 표준 견적 요청서")
-    header_info = default_header_info(entity_name, entity, method, product)
+    header_info = default_header_info(entity_name, entity, method, product,
+                                      part_name=part_name, unit_weight_g=unit_weight_g)
 
     meta_cols = st.columns(3)
     items = list(header_info.items())
