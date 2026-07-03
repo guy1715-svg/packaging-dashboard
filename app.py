@@ -246,7 +246,9 @@ with tab_calc:
             {"label": "트레이당 제품", "value": f"{n_per_tray:,}", "unit": "개",
              "sub": f"칸 배열 {ngrid[0]}×{ngrid[1]} · {tray_l:g}×{tray_w:g}"},
             {"label": f"박스당 트레이 · {pack_box_name}", "value": f"{m_per_box:,}",
-             "unit": "장", "sub": f"바닥 {base_cnt}장 × 적층 {layers}단", "op": "×"},
+             "unit": "장",
+             "sub": f"바닥 {base_cnt}장 × {layers}단 "
+                    f"(박스H {pack_box['inner_h']:g} ÷ 두께 {tray_thickness:g})", "op": "×"},
             {"label": "박스당 총 제품", "value": f"{total:,}", "unit": "개",
              "sub": f"{pack_box['size']}", "op": "=", "variant": "total"},
         ])
