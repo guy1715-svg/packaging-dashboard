@@ -12,6 +12,7 @@
 """
 
 import copy
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -170,7 +171,18 @@ with tab_calc:
                     format="%.0f%%", min_value=0, max_value=100),
             },
         )
-        st.bar_chart(df.set_index("박스명")["박스당 적재수량"])
+        chart = (
+            alt.Chart(df)
+            .mark_bar(color="#7EC8F3")
+            .encode(
+                x=alt.X("박스명:N", sort=None,
+                        axis=alt.Axis(labelAngle=0, title=None)),
+                y=alt.Y("박스당 적재수량:Q", title="박스당 적재수량"),
+                tooltip=["박스명", "규격(Size)", "박스당 적재수량"],
+            )
+            .properties(height=320)
+        )
+        st.altair_chart(chart, use_container_width=True)
         with st.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
                 "- **박스**: ⌊박스내경 ÷ 제품외경⌋ 을 L·W·H에 적용 후 곱셈 "
