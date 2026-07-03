@@ -144,11 +144,11 @@ def categories_for(entity_code):
 #    흐름: 제품 → (포장재) → 박스
 # ---------------------------------------------------------------------------
 PACKAGING_CONFIG = {
-    "SW-KR": {                                    # 성우전자 본사
-        "inner_options": ["없음(벌크)", "범용트레이"],
-        "outer_groups": ["박스(Carton)"],
+    "SW-KR": {                                    # 성우전자 본사 (지퍼백·단프라·플라스틱 + 트레이)
+        "inner_options": ["없음(벌크)", "지퍼백", "범용트레이"],
+        "outer_groups": ["박스(Carton)", "단프라박스", "플라스틱박스"],
         "tray_group": "트레이(Tray)",
-        "bag_group": None,
+        "bag_group": "지퍼백(Zipper)",
     },
     "SW-VN": {                                    # 성우비나
         "inner_options": ["없음(벌크)", "지퍼백"],
@@ -157,3 +157,7 @@ PACKAGING_CONFIG = {
         "bag_group": "지퍼백(Zipper)",
     },
 }
+
+# 성우전자도 지퍼백·단프라박스·플라스틱박스를 동일 규격으로 사용 (공용 카탈로그)
+for _grp in ("지퍼백(Zipper)", "단프라박스", "플라스틱박스"):
+    BOX_CATALOG["SW-KR"][_grp] = BOX_CATALOG["SW-VN"][_grp]

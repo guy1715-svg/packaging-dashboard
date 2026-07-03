@@ -200,14 +200,17 @@ def fit_zipper_bag(product, bags):
 
 def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_group="",
                          unit_weight_g=0.0, part_name="", wall_margin=0.0,
-                         use_best=True, tray_cells=0, tray_l=0.0, tray_w=0.0,
-                         tray_thickness=0.0, bag_name=""):
+                         use_best=True, tray_cells=0, tray_grid=(0, 0),
+                         tray_l=0.0, tray_w=0.0, tray_thickness=0.0,
+                         bag_name="", bag_count=1, bag_l=0.0, bag_w=0.0, bag_h=0.0):
     """
     제품 → (포장재) → 박스 흐름으로 '박스 1개당 총 제품 수'를 박스별로 계산.
 
-      inner_mode 에 '트레이' 포함  → 총제품 = 트레이 칸수 × (박스당 트레이 장수)
-      inner_mode 에 '지퍼백' 포함  → 제품을 봉지에 넣어 박스에 3D 벌크 적재
-      그 외(없음/벌크)             → 제품을 박스에 직접 3D 벌크 적재
+      트레이 : 총제품 = 트레이 칸수 × (박스당 트레이 장수)
+      지퍼백 : 총제품 = 지퍼백 입수(bag_count) × (박스당 지퍼백 봉수, 봉투 3D 적재)
+      없음   : 총제품 = 제품을 박스에 직접 3D 적재
+
+    각 행에 그리기용 필드(_cols/_rows/_layers/_unit)를 포함합니다.
     """
     is_tray = "트레이" in inner_mode
     is_bag = "지퍼백" in inner_mode
@@ -219,14 +222,20 @@ def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_grou
                 tray_l, tray_w, tray_thickness, box, wall_margin=wall_margin)
             base_total = tray_cells * m_per_box
             method = f"트레이 {tray_cells}칸 × {m_per_box}장 (바닥{base_cnt}×{layers}단)"
+            dcols, drows, dlayers, dunit = tray_grid[0], tray_grid[1], m_per_box, "칸"
+        elif is_bag:
+            m_per_box, grid, _ = loading_qty_best_orientation((bag_l, bag_w, bag_h), b)
+            base_total = bag_count * m_per_box
+            method = f"{bag_count}개입 지퍼백 × {m_per_box}봉 (3D {grid[0]}×{grid[1]}×{grid[2]})"
+            dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "봉"
         else:
             if use_best:
                 qty, grid, _ = loading_qty_best_orientation(product, b)
             else:
                 qty, grid = loading_qty_axis_aligned(product, b)
             base_total = qty
-            prefix = "지퍼백 포장 후 " if is_bag else "벌크 "
-            method = f"{prefix}3D {grid[0]}×{grid[1]}×{grid[2]}"
+            method = f"벌크 3D {grid[0]}×{grid[1]}×{grid[2]}"
+            dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "개"
 
         # 무게 제한 (박스 허용중량 초과 방지)
         w_cap = weight_cap_qty(box, unit_weight_g)
@@ -256,6 +265,7 @@ def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_grou
             "제품 1개당 원가(견적통화)": cost["unit_cost_quote"],
             "비고": box.get("비고", ""),
             "구매 확정 단가": None,
+            "_cols": dcols, "_rows": drows, "_layers": dlayers, "_unit": dunit,
         })
     return rows
 

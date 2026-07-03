@@ -12,9 +12,9 @@
 """
 
 import copy
-import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from data import ENTITIES, BOX_CATALOG, PACKAGING_CONFIG
 from calculations import build_packaging_rows, tray_cell_count, fit_zipper_bag
@@ -103,6 +103,46 @@ def section(title):
                 unsafe_allow_html=True)
 
 
+def packing_image(cols, rows_, layers, unit, box_name, total):
+    """박스 1개의 윗면 적재 배치를 그린 SVG 이미지 (한 층 기준 + 단수 표기)."""
+    cols, rows_, layers = int(cols), int(rows_), max(int(layers), 1)
+    if cols <= 0 or rows_ <= 0:
+        st.info("이 조합은 적재되지 않아 이미지를 표시할 수 없습니다.")
+        return
+    cap = 22
+    dc, dr = min(cols, cap), min(rows_, cap)
+    trunc = cols > cap or rows_ > cap
+    cell, gap, pad, top = 20, 4, 22, 54
+    w = pad * 2 + dc * (cell + gap) - gap
+    h = top + pad + dr * (cell + gap) - gap + pad
+    w = max(w, 320)
+    rects = []
+    for r in range(dr):
+        for c in range(dc):
+            x = pad + c * (cell + gap)
+            y = top + r * (cell + gap)
+            rects.append(
+                f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" '
+                f'fill="#3987e5" fill-opacity="0.9" stroke="#7ec8f3" stroke-width="1"/>')
+    caption = f"윗면 {cols}×{rows_} = {cols*rows_} {unit}/층  ·  {layers}층"
+    if trunc:
+        caption += "  (그림은 일부만 표시)"
+    svg = f'''
+<div style="background:#161b22;border:1px solid #2a3140;border-radius:14px;
+     padding:14px 16px;overflow-x:auto;font-family:system-ui,sans-serif;">
+  <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:2px;">
+     📦 {box_name} · 적재 배치도</div>
+  <div style="color:#8b98a5;font-size:12.5px;margin-bottom:10px;">
+     {caption}  →  <b style="color:#40d6a0;">박스당 {total:,} 개</b></div>
+  <svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="6" y="{top-8}" width="{w-12}" height="{h-top-4}" rx="10"
+          fill="none" stroke="#2a3140" stroke-width="2"/>
+    {''.join(rects)}
+  </svg>
+</div>'''
+    components.html(svg, height=h + 70, scrolling=True)
+
+
 # ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
@@ -169,6 +209,23 @@ with st.sidebar:
                 "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
                 help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
 
+    # --- 지퍼백 설정 (지퍼백 선택 시) ---
+    bag_count = 1
+    bag_l = bag_w = bag_h = 0.0
+    if is_bag:
+        _fit = fit_zipper_bag(product, BOX_CATALOG[entity_code][cfg["bag_group"]])
+        with st.expander("👜 지퍼백 설정", expanded=True):
+            bag_count = st.number_input(
+                "지퍼백 1개당 제품 수 (입수)", min_value=1, value=1, step=1,
+                help="지퍼백 1봉지에 담는 제품 수. 예: 50, 100")
+            g1, g2, g3 = st.columns(3)
+            bag_l = g1.number_input("봉투 가로", min_value=0.0,
+                                    value=float(_fit["inner_l"]) if _fit else 100.0, step=5.0)
+            bag_w = g2.number_input("봉투 세로", min_value=0.0,
+                                    value=float(_fit["inner_w"]) if _fit else 140.0, step=5.0)
+            bag_h = g3.number_input("봉투 높이", min_value=0.0, value=20.0, step=5.0,
+                                    help="제품을 담은 지퍼백 1봉지의 두께(높이)")
+
     # --- 고급 옵션 (기본 접힘) ---
     with st.expander("⚙️ 고급 옵션"):
         use_best = st.toggle("최적 방향(회전) 적재", value=True,
@@ -214,8 +271,9 @@ if is_bag and cfg["bag_group"]:
 rows = build_packaging_rows(
     product, outer_boxes, entity, inner_mode=inner_mode, outer_group=outer_group,
     unit_weight_g=unit_weight_g, part_name=part_name, wall_margin=wall_margin,
-    use_best=use_best, tray_cells=tray_cells, tray_l=tray_l, tray_w=tray_w,
-    tray_thickness=tray_thickness, bag_name=bag_name)
+    use_best=use_best, tray_cells=tray_cells, tray_grid=tray_grid,
+    tray_l=tray_l, tray_w=tray_w, tray_thickness=tray_thickness,
+    bag_name=bag_name, bag_count=bag_count, bag_l=bag_l, bag_w=bag_w, bag_h=bag_h)
 
 best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
 
@@ -249,22 +307,28 @@ with tab_calc:
         if is_tray:
             cards.append({"label": "트레이당 제품", "value": f"{tray_cells:,}",
                           "unit": "개", "sub": f"칸 배열 {tray_grid[0]}×{tray_grid[1]}"})
+        elif is_bag:
+            cards.append({"label": "지퍼백 1개당 (입수)", "value": f"{bag_count:,}",
+                          "unit": "개",
+                          "sub": f"봉투 {bag_l:g}×{bag_w:g}×{bag_h:g} · 적합 {bag_name}"})
         cards.append({"label": f"박스당 총 제품 · {best_row['박스명']}",
                       "value": f"{best_row['박스당 총 제품']:,}", "unit": "개",
                       "sub": f"규격 {best_row['규격(Size)']}",
-                      "op": "→" if is_tray else "", "variant": "total"})
-        if is_bag:
-            cards.append({"label": "적합 지퍼백", "value": bag_name or "-", "unit": "",
-                          "sub": "제품이 들어가는 최소 규격"})
-        else:
-            cards.append({"label": "검토 박스", "value": f"{len(rows)}", "unit": "종",
-                          "sub": outer_group})
+                      "op": "→" if (is_tray or is_bag) else "", "variant": "total"})
+        cards.append({"label": "검토 박스", "value": f"{len(rows)}", "unit": "종",
+                      "sub": outer_group})
         kpi_row(cards)
         if best_row["박스당 총 제품"] == 0:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
         st.markdown("")
 
-        df = pd.DataFrame(rows)
+        # 적재 배치 이미지 (최다 적재 박스 기준)
+        section("적재 배치도")
+        packing_image(best_row["_cols"], best_row["_rows"], best_row["_layers"],
+                      best_row["_unit"], best_row["박스명"], best_row["박스당 총 제품"])
+        st.markdown("")
+
+        df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
         section(f"{outer_group} · 박스별 총 제품 수")
         show_cols = ["박스명", "규격(Size)", "포장재", "적재 방식",
                      "박스당 총 제품", "제한 요인", "비고"]
@@ -277,33 +341,13 @@ with tab_calc:
             },
         )
 
-        # 막대 차트: 최다 적재 박스 그린 강조
-        mx = df["박스당 총 제품"].max()
-        chart = (
-            alt.Chart(df)
-            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
-            .encode(
-                x=alt.X("박스명:N", sort=None, axis=alt.Axis(labelAngle=0, title=None)),
-                y=alt.Y("박스당 총 제품:Q", title="박스당 총 제품",
-                        axis=alt.Axis(grid=True)),
-                color=alt.condition(alt.datum["박스당 총 제품"] == mx,
-                                    alt.value("#199e70"), alt.value("#3987e5")),
-                tooltip=["박스명", "규격(Size)", "적재 방식", "박스당 총 제품"],
-            )
-            .properties(height=300)
-            .configure_view(strokeWidth=0)
-            .configure_axis(labelColor="#8b98a5", titleColor="#8b98a5",
-                            gridColor="#2a3140", domainColor="#2a3140")
-        )
-        st.altair_chart(chart, use_container_width=True)
-
         cta, info_ = st.columns([1, 1])
         cta.info("📄 견적서로 만들려면 상단 **'구매팀 견적 양식'** 탭으로 이동하세요.")
         with info_.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
                 "- **없음(벌크)**: 제품을 박스에 직접 3D 적재 "
                 "⌊박스 ÷ 제품⌋ (최적 방향 6방향 중 최대)\n"
-                "- **지퍼백**: 제품을 봉투에 넣어 박스에 3D 적재 (적합 봉투 자동 선정)\n"
+                "- **지퍼백**: 지퍼백 입수(1봉지당 제품 수) × (박스당 봉지 수) = 박스당 총 제품\n"
                 "- **범용트레이**: 트레이 칸수 × (박스당 트레이 장수) = 박스당 총 제품\n"
                 "- **무게 입력 시**: 박스 허용중량을 넘지 않도록 제한 → '제한 요인'에 표시")
 
@@ -323,7 +367,8 @@ with tab_form:
     if not rows:
         st.warning("표시할 항목이 없습니다.")
     else:
-        editable = pd.DataFrame(rows)
+        editable = pd.DataFrame(rows).drop(
+            columns=["_cols", "_rows", "_layers", "_unit"], errors="ignore")
         edited = st.data_editor(
             editable,
             use_container_width=True, hide_index=True, num_rows="fixed",
