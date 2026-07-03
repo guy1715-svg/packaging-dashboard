@@ -27,16 +27,98 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# 디자인 시스템 (검증된 다크 팔레트)
+# ---------------------------------------------------------------------------
+st.markdown("""
+<style>
+:root{
+  --bg:#0d1117; --surface:#161b22; --surface2:#1c2432; --border:#2a3140;
+  --text:#e6edf3; --muted:#8b98a5; --accent:#3987e5; --accent2:#199e70; --warn:#c98500;
+}
+.block-container{padding-top:1.6rem;padding-bottom:2rem;max-width:1320px;}
+h1,h2,h3{letter-spacing:-.01em;}
+h1{font-size:1.85rem !important;}
+/* 상단 컨텍스트 칩 바 */
+.ctxbar{display:flex;gap:8px;flex-wrap:wrap;margin:.2rem 0 1rem;}
+.chip{background:var(--surface);border:1px solid var(--border);border-radius:999px;
+  padding:5px 13px;font-size:.82rem;color:var(--text);white-space:nowrap;}
+.chip b{color:var(--muted);font-weight:600;margin-right:6px;font-size:.76rem;}
+/* 섹션 헤더 */
+.sec{display:flex;align-items:center;gap:9px;margin:.4rem 0 .5rem;font-weight:700;
+  font-size:1.06rem;color:var(--text);}
+.sec .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 4px rgba(57,135,229,.16);}
+/* KPI 카드 행 */
+.kpi-row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:.3rem 0 .2rem;}
+.kpi-card{flex:1;min-width:150px;background:#161b22;border:1px solid #2a3140;
+  border-radius:14px;padding:15px 18px;position:relative;overflow:hidden;
+  animation:kpiIn .45s cubic-bezier(.2,.7,.3,1) both;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
+.kpi-card:hover{transform:translateY(-3px);border-color:var(--accent);
+  box-shadow:0 6px 22px rgba(0,0,0,.35);}
+.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);}
+.kpi-card.total{background:linear-gradient(180deg,rgba(25,158,112,.16),var(--surface));
+  border-color:var(--accent2);}
+.kpi-card.total::before{background:var(--accent2);}
+.kpi-label{font-size:.78rem;color:var(--muted);margin-bottom:7px;}
+.kpi-value{font-size:2.05rem;font-weight:750;color:var(--text);line-height:1.05;
+  font-variant-numeric:tabular-nums;}
+.kpi-card.total .kpi-value{color:#40d6a0;}
+.kpi-unit{font-size:.92rem;font-weight:600;color:var(--muted);margin-left:5px;}
+.kpi-sub{font-size:.73rem;color:var(--muted);margin-top:7px;}
+.kpi-op{display:flex;align-items:center;font-size:1.5rem;color:var(--muted);font-weight:700;}
+@keyframes kpiIn{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:none;}}
+/* 사이드바 스텝 배지 */
+.step{display:flex;align-items:center;gap:9px;margin:.1rem 0 .3rem;font-weight:700;
+  font-size:.98rem;color:var(--text);}
+.step .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:50%;background:var(--accent);color:#06121f;font-size:.8rem;font-weight:800;}
+section[data-testid="stSidebar"]{border-right:1px solid var(--border);}
+/* 탭 */
+.stTabs [data-baseweb="tab-list"]{gap:4px;}
+.stTabs [data-baseweb="tab"]{padding:8px 16px;border-radius:9px 9px 0 0;}
+</style>
+""", unsafe_allow_html=True)
+
+
+def kpi_row(cards):
+    """KPI 카드 한 줄 렌더링. cards: [{label,value,unit,sub,variant,op}]"""
+    html = ['<div class="kpi-row">']
+    for c in cards:
+        if c.get("op"):
+            html.append(f'<div class="kpi-op">{c["op"]}</div>')
+        html.append(
+            f'<div class="kpi-card {c.get("variant","")}">'
+            f'<div class="kpi-label">{c["label"]}</div>'
+            f'<div class="kpi-value">{c["value"]}'
+            f'<span class="kpi-unit">{c.get("unit","")}</span></div>'
+            f'<div class="kpi-sub">{c.get("sub","")}</div></div>'
+        )
+    html.append('</div>')
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+
+def section(title):
+    st.markdown(f'<div class="sec"><span class="dot"></span>{title}</div>',
+                unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
-st.title("📦 성우전자 · 성우비나 포장 사양 견적 대시보드")
+st.title("📦 성우전자 · 성우비나 포장 견적 대시보드")
 st.caption("포장 사양 입력 → 적재 효율 자동 계산 → 구매팀 전달용 견적 요청서 생성")
 
 # ---------------------------------------------------------------------------
 # 사이드바 - 입력
 # ---------------------------------------------------------------------------
+def sidebar_step(n, title):
+    st.markdown(f'<div class="step"><span class="num">{n}</span>{title}</div>',
+                unsafe_allow_html=True)
+
+
 with st.sidebar:
-    st.header("포장 사양 입력")
+    sidebar_step(1, "기본 입력")
 
     entity_name = st.selectbox("대상 법인", list(ENTITIES.keys()))
     entity_code = ENTITIES[entity_name]["code"]
@@ -58,6 +140,9 @@ with st.sidebar:
     unit_weight_g = st.number_input(
         "제품 1개 무게 (g) · 0=무게 무시", min_value=0.0, value=0.0, step=1.0,
         help="값을 넣으면 박스 허용중량을 넘지 않도록 적재수량을 제한합니다.")
+
+    st.markdown("")
+    sidebar_step(2, "세부 설정")
 
     # --- 트레이 전용 설정 (트레이 분류일 때만) ---
     tray_gap = 0.0
@@ -100,7 +185,9 @@ with st.sidebar:
             "박스 벽두께 여유 (mm)", min_value=0.0, value=0.0, step=1.0,
             help="박스 규격이 외경일 때, 벽두께만큼 빼고 계산합니다. (0=규격 그대로)")
 
-    # --- 단가·환율 (기본 접힘) ---
+    st.markdown("")
+    sidebar_step(3, "단가 · 환율")
+
     base = ENTITIES[entity_name]
     entity = copy.deepcopy(base)
     with st.expander("💱 단가 · 환율 (법인별)"):
@@ -125,16 +212,17 @@ rows = build_quote_rows(product, boxes, entity, use_best_orientation=use_best,
                         wall_margin=wall_margin, tray_gap=tray_gap,
                         tray_pitch_x=tray_pitch_x, tray_pitch_y=tray_pitch_y)
 
-# 요약 지표
-top = st.columns(4)
-top[0].metric("대상 법인", entity_name.split(" ")[0])
-top[1].metric("포장재 분류", category)
-top[2].metric("제품 사이즈", f"{pl:g}×{pw:g}×{ph:g}")
+# 컨텍스트 칩 바
 best_row = max(rows, key=lambda r: r["박스당 적재수량"]) if rows else None
-top[3].metric("최대 적재수량 / 박스",
-              f'{best_row["박스당 적재수량"]:,} ({best_row["박스명"]})' if best_row else "0")
-
-st.divider()
+_wchip = f'<span class="chip"><b>무게</b> {unit_weight_g:g} g</span>' if unit_weight_g else ""
+st.markdown(
+    '<div class="ctxbar">'
+    f'<span class="chip"><b>법인</b> {entity_name}</span>'
+    f'<span class="chip"><b>분류</b> {category}</span>'
+    f'<span class="chip"><b>품명</b> {part_name or "-"}</span>'
+    f'<span class="chip"><b>제품(mm)</b> {pl:g}×{pw:g}×{ph:g}</span>'
+    f'{_wchip}'
+    '</div>', unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # 탭 구성
@@ -144,9 +232,9 @@ tab_calc, tab_form, tab_data = st.tabs(
 
 # --- 탭1: 적재 효율 ---
 with tab_calc:
-    # 트레이 분류: 제품→트레이→박스 통합 계산 패널
+    # 트레이 분류: 제품→트레이→박스 통합 계산 (히어로 플로우 카드)
     if is_tray and custom_tray is not None and pack_box_name:
-        st.subheader("🔗 제품 → 트레이 → 박스")
+        section("제품 → 트레이 → 박스")
         n_per_tray, ngrid = tray_cell_count(product, custom_tray, gap=tray_gap,
                                             pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
         pack_box = next(b for b in _cartons if b["박스명"] == pack_box_name)
@@ -154,21 +242,38 @@ with tab_calc:
             tray_l, tray_w, tray_thickness, pack_box, wall_margin=wall_margin)
         total = n_per_tray * m_per_box
 
-        cc = st.columns(3)
-        cc[0].metric("트레이당 제품", f"{n_per_tray:,} 개", help=f"배열 {ngrid[0]}×{ngrid[1]}")
-        cc[1].metric(f"박스당 트레이 ({pack_box_name})", f"{m_per_box:,} 장",
-                     help=f"바닥 {base_cnt}장 × {layers}단")
-        cc[2].metric("박스당 총 제품", f"{total:,} 개")
+        kpi_row([
+            {"label": "트레이당 제품", "value": f"{n_per_tray:,}", "unit": "개",
+             "sub": f"칸 배열 {ngrid[0]}×{ngrid[1]} · {tray_l:g}×{tray_w:g}"},
+            {"label": f"박스당 트레이 · {pack_box_name}", "value": f"{m_per_box:,}",
+             "unit": "장", "sub": f"바닥 {base_cnt}장 × 적층 {layers}단", "op": "×"},
+            {"label": "박스당 총 제품", "value": f"{total:,}", "unit": "개",
+             "sub": f"{pack_box['size']}", "op": "=", "variant": "total"},
+        ])
         if m_per_box == 0:
             st.warning("이 박스에는 트레이가 들어가지 않습니다. 트레이 두께/사이즈 또는 박스를 확인하세요.")
-        st.divider()
+        st.markdown("")
 
-    st.subheader(f"{category} · 박스별 적재수량")
     if not rows:
         st.error("적재 가능한 박스가 없습니다. 제품 사이즈가 박스 내경보다 큰지 확인하세요.")
     else:
         df = pd.DataFrame(rows)
-        # 적재 효율 탭: 핵심 열만 (원가는 '견적 양식' 탭에서)
+
+        # 히어로: 이 분류에서 가장 많이 담기는 박스 (박스/지퍼백 분류일 때)
+        if not is_tray and best_row:
+            eff = best_row["부피효율(%)"]
+            kpi_row([
+                {"label": f"최다 적재 · {best_row['박스명']}",
+                 "value": f"{best_row['박스당 적재수량']:,}", "unit": "개",
+                 "sub": f"규격 {best_row['규격(Size)']}", "variant": "total"},
+                {"label": "부피효율", "value": f"{eff:.0f}", "unit": "%",
+                 "sub": "상위 박스 기준"},
+                {"label": "검토 대상", "value": f"{len(rows)}", "unit": "종",
+                 "sub": category},
+            ])
+            st.markdown("")
+
+        section(f"{category} · 박스별 적재수량")
         show_cols = ["품명", "박스명", "규격(Size)", "유형", "적재 배열",
                      "박스당 적재수량", "제한 요인", "부피효율(%)", "비고"]
         if unit_weight_g:
@@ -182,38 +287,49 @@ with tab_calc:
                     format="%.0f%%", min_value=0, max_value=100),
             },
         )
+
+        # 막대 차트: 최다 적재 박스는 그린으로 강조 (검증 팔레트)
+        mx = df["박스당 적재수량"].max()
         chart = (
             alt.Chart(df)
-            .mark_bar(color="#7EC8F3")
+            .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
             .encode(
-                x=alt.X("박스명:N", sort=None,
-                        axis=alt.Axis(labelAngle=0, title=None)),
-                y=alt.Y("박스당 적재수량:Q", title="박스당 적재수량"),
-                tooltip=["박스명", "규격(Size)", "박스당 적재수량"],
+                x=alt.X("박스명:N", sort=None, axis=alt.Axis(labelAngle=0, title=None)),
+                y=alt.Y("박스당 적재수량:Q", title="박스당 적재수량",
+                        axis=alt.Axis(grid=True)),
+                color=alt.condition(alt.datum["박스당 적재수량"] == mx,
+                                    alt.value("#199e70"), alt.value("#3987e5")),
+                tooltip=["박스명", "규격(Size)", "유형", "박스당 적재수량"],
             )
-            .properties(height=320)
+            .properties(height=300)
+            .configure_view(strokeWidth=0)
+            .configure_axis(labelColor="#8b98a5", titleColor="#8b98a5",
+                            gridColor="#2a3140", domainColor="#2a3140")
         )
         st.altair_chart(chart, use_container_width=True)
-        with st.expander("ℹ️ 계산 방식 보기"):
+
+        cta, info_ = st.columns([1, 1])
+        cta.info("📄 견적서로 만들려면 상단 **'구매팀 견적 양식'** 탭으로 이동하세요.")
+        with info_.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
                 "- **박스**: ⌊박스내경 ÷ 제품외경⌋ 을 L·W·H에 적용 후 곱셈 "
                 "(최적 방향 ON 시 6방향 중 최대)\n"
-                "- **트레이**: ⌊트레이 ÷ 제품⌋ 로 칸수 계산\n"
+                "- **트레이**: ⌊트레이 ÷ 제품(또는 피치)⌋ 로 칸수 계산\n"
                 "- **지퍼백**: 제품이 봉투에 들어가면 1개입\n"
-                "- **무게 입력 시**: 최종수량 = MIN(부피 기준, 무게 기준) → '제한 요인'에 표시")
+                "- **무게 입력 시**: 최종수량 = MIN(부피, 무게) → '제한 요인'에 표시")
 
 # --- 탭2: 견적 양식 + 다운로드 ---
 with tab_form:
-    st.subheader("구매팀 전달용 표준 견적 요청서")
+    section("구매팀 전달용 표준 견적 요청서")
     header_info = default_header_info(entity_name, entity, category, product,
                                       part_name=part_name, unit_weight_g=unit_weight_g)
 
-    meta_cols = st.columns(3)
-    items = list(header_info.items())
-    for i, (k, v) in enumerate(items):
-        meta_cols[i % 3].write(f"**{k}**: {v}")
+    # 메타 정보를 칩으로
+    chips = "".join(f'<span class="chip"><b>{k}</b> {v}</span>'
+                    for k, v in header_info.items())
+    st.markdown(f'<div class="ctxbar">{chips}</div>', unsafe_allow_html=True)
 
-    st.markdown("##### 견적 항목 (구매팀이 '구매 확정 단가'를 입력해 회신)")
+    st.markdown("##### 견적 항목  ·  구매팀이 **‘구매 확정 단가’** 열에 입력해 회신")
     if not rows:
         st.warning("표시할 항목이 없습니다.")
     else:
@@ -231,7 +347,7 @@ with tab_form:
         )
         export_rows = edited.to_dict(orient="records")
 
-        st.markdown("##### 다운로드")
+        section("다운로드하여 구매팀에 전달")
         d1, d2 = st.columns(2)
         with d1:
             st.download_button(
@@ -252,7 +368,7 @@ with tab_form:
 
 # --- 탭3: 기준 데이터 열람 ---
 with tab_data:
-    st.subheader("표준 박스 카탈로그 (기준 데이터)")
+    section("표준 박스 카탈로그 (기준 데이터)")
     st.caption("실제 값 수정은 `data.py`의 BOX_CATALOG / ENTITIES 딕셔너리에서 관리합니다.")
     st.markdown(f"**{category} · {entity_name}**")
     st.dataframe(pd.DataFrame(boxes), use_container_width=True, hide_index=True)
