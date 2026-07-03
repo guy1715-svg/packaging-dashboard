@@ -177,6 +177,89 @@ def trays_per_box(tray_l, tray_w, tray_thickness, box, wall_margin=0.0):
     return base * layers, base, layers
 
 
+def _apply_margin(box, margin):
+    if not margin:
+        return box
+    b = dict(box)
+    b["inner_l"] = max(box["inner_l"] - margin, 0)
+    b["inner_w"] = max(box["inner_w"] - margin, 0)
+    b["inner_h"] = max(box["inner_h"] - margin, 0)
+    return b
+
+
+def fit_zipper_bag(product, bags):
+    """제품이 들어가는 가장 작은(면적 기준) 지퍼백을 반환. 없으면 None."""
+    a, b = sorted(product)[:2]         # 제품 바닥면 두 변
+    cand = []
+    for bg in bags:
+        bl, bw = sorted([bg["inner_l"], bg["inner_w"]])
+        if a <= bl and b <= bw:
+            cand.append((bl * bw, bg))
+    return min(cand, key=lambda x: x[0])[1] if cand else None
+
+
+def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_group="",
+                         unit_weight_g=0.0, part_name="", wall_margin=0.0,
+                         use_best=True, tray_cells=0, tray_l=0.0, tray_w=0.0,
+                         tray_thickness=0.0, bag_name=""):
+    """
+    제품 → (포장재) → 박스 흐름으로 '박스 1개당 총 제품 수'를 박스별로 계산.
+
+      inner_mode 에 '트레이' 포함  → 총제품 = 트레이 칸수 × (박스당 트레이 장수)
+      inner_mode 에 '지퍼백' 포함  → 제품을 봉지에 넣어 박스에 3D 벌크 적재
+      그 외(없음/벌크)             → 제품을 박스에 직접 3D 벌크 적재
+    """
+    is_tray = "트레이" in inner_mode
+    is_bag = "지퍼백" in inner_mode
+    rows = []
+    for box in outer_boxes:
+        b = _apply_margin(box, wall_margin)
+        if is_tray:
+            m_per_box, base_cnt, layers = trays_per_box(
+                tray_l, tray_w, tray_thickness, box, wall_margin=wall_margin)
+            base_total = tray_cells * m_per_box
+            method = f"트레이 {tray_cells}칸 × {m_per_box}장 (바닥{base_cnt}×{layers}단)"
+        else:
+            if use_best:
+                qty, grid, _ = loading_qty_best_orientation(product, b)
+            else:
+                qty, grid = loading_qty_axis_aligned(product, b)
+            base_total = qty
+            prefix = "지퍼백 포장 후 " if is_bag else "벌크 "
+            method = f"{prefix}3D {grid[0]}×{grid[1]}×{grid[2]}"
+
+        # 무게 제한 (박스 허용중량 초과 방지)
+        w_cap = weight_cap_qty(box, unit_weight_g)
+        if w_cap is not None and w_cap < base_total:
+            total, limit = w_cap, "무게 제한"
+        else:
+            total, limit = base_total, ("무게 OK" if unit_weight_g else "-")
+
+        total_w = round(total * unit_weight_g / 1000, 2) if unit_weight_g else 0.0
+        cost = cost_per_box(box, entity, total)
+        inner_label = inner_mode + (f" · {bag_name}" if (is_bag and bag_name) else "")
+
+        rows.append({
+            "품명": part_name if part_name else "-",
+            "박스종류": outer_group,
+            "박스명": box.get("박스명", ""),
+            "규격(Size)": box.get("size", ""),
+            "포장재": inner_label,
+            "적재 방식": method,
+            "박스당 총 제품": total,
+            "제한 요인": limit,
+            "박스 총중량(kg)": total_w,
+            "허용중량(kg)": box.get("max_weight_kg", 0),
+            "박스 단가": cost["box_cost"],
+            "포장 인건비(가중)": cost["weighted_labor"],
+            "박스당 총원가": cost["total_local"],
+            "제품 1개당 원가(견적통화)": cost["unit_cost_quote"],
+            "비고": box.get("비고", ""),
+            "구매 확정 단가": None,
+        })
+    return rows
+
+
 def build_quote_rows(product, boxes, entity, use_best_orientation=True,
                      unit_weight_g=0.0, part_name="", wall_margin=0.0, tray_gap=0.0,
                      tray_pitch_x=0.0, tray_pitch_y=0.0):

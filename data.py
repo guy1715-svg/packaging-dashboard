@@ -135,3 +135,25 @@ BOX_CATALOG = {
 def categories_for(entity_code):
     """해당 법인의 포장재 분류 리스트."""
     return list(BOX_CATALOG[entity_code].keys())
+
+
+# ---------------------------------------------------------------------------
+# 3) 포장 방식 구성 (법인별)
+#    - inner(포장재, 안쪽): 없음(벌크) / 지퍼백 / 범용트레이
+#    - outer(박스 종류, 바깥): 박스 / 단프라박스 / 플라스틱박스
+#    흐름: 제품 → (포장재) → 박스
+# ---------------------------------------------------------------------------
+PACKAGING_CONFIG = {
+    "SW-KR": {                                    # 성우전자 본사
+        "inner_options": ["없음(벌크)", "범용트레이"],
+        "outer_groups": ["박스(Carton)"],
+        "tray_group": "트레이(Tray)",
+        "bag_group": None,
+    },
+    "SW-VN": {                                    # 성우비나
+        "inner_options": ["없음(벌크)", "지퍼백"],
+        "outer_groups": ["박스(Carton)", "단프라박스", "플라스틱박스"],
+        "tray_group": None,
+        "bag_group": "지퍼백(Zipper)",
+    },
+}
