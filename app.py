@@ -61,16 +61,25 @@ with st.sidebar:
 
     # --- 트레이 전용 설정 (트레이 분류일 때만) ---
     tray_gap = 0.0
+    tray_pitch_x = 0.0
+    tray_pitch_y = 0.0
     custom_tray = None
     if is_tray:
         with st.expander("🔧 트레이 설정", expanded=True):
             t1, t2 = st.columns(2)
             tray_l = t1.number_input("트레이 가로", min_value=0.0, value=315.0, step=5.0)
             tray_w = t2.number_input("트레이 세로", min_value=0.0, value=410.0, step=5.0)
-            tray_thickness = st.number_input("트레이 두께/높이 (mm)", min_value=0.0,
-                                             value=15.0, step=1.0)
-            tray_gap = st.number_input("칸 사이 여유 간격 (mm)", min_value=0.0,
-                                       value=0.0, step=0.5)
+            tray_thickness = st.number_input(
+                "트레이 두께/높이 (mm)", min_value=0.0, value=15.0, step=1.0,
+                help="트레이 1장 높이 → 박스에 몇 단 쌓이는지 계산에 사용")
+            p1, p2 = st.columns(2)
+            tray_pitch_x = p1.number_input("제품 피치 X", min_value=0.0, value=0.0,
+                                           step=0.5, help="칸 중심간 거리(도면값). 0=자동")
+            tray_pitch_y = p2.number_input("제품 피치 Y", min_value=0.0, value=0.0,
+                                           step=0.5, help="0=자동(제품크기+여유로 계산)")
+            tray_gap = st.number_input(
+                "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
+                help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
             _cartons = BOX_CATALOG[entity_code].get("박스(Carton)", [])
             _carton_names = [b["박스명"] for b in _cartons]
             pack_box_name = st.selectbox("트레이를 담을 박스", _carton_names) \
@@ -113,7 +122,8 @@ if custom_tray is not None:
     boxes = [custom_tray] + boxes      # 사용자 지정 트레이를 맨 위에
 rows = build_quote_rows(product, boxes, entity, use_best_orientation=use_best,
                         unit_weight_g=unit_weight_g, part_name=part_name,
-                        wall_margin=wall_margin, tray_gap=tray_gap)
+                        wall_margin=wall_margin, tray_gap=tray_gap,
+                        tray_pitch_x=tray_pitch_x, tray_pitch_y=tray_pitch_y)
 
 # 요약 지표
 top = st.columns(4)
@@ -137,7 +147,8 @@ with tab_calc:
     # 트레이 분류: 제품→트레이→박스 통합 계산 패널
     if is_tray and custom_tray is not None and pack_box_name:
         st.subheader("🔗 제품 → 트레이 → 박스")
-        n_per_tray, ngrid = tray_cell_count(product, custom_tray, gap=tray_gap)
+        n_per_tray, ngrid = tray_cell_count(product, custom_tray, gap=tray_gap,
+                                            pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
         pack_box = next(b for b in _cartons if b["박스명"] == pack_box_name)
         m_per_box, base_cnt, layers = trays_per_box(
             tray_l, tray_w, tray_thickness, pack_box, wall_margin=wall_margin)

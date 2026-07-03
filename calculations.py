@@ -109,9 +109,13 @@ def product_fits_2d(product, box):
     return dims[0] <= base[0] and dims[1] <= base[1]
 
 
-def tray_cell_count(product, tray, gap=0.0):
+def tray_cell_count(product, tray, gap=0.0, pitch_x=0.0, pitch_y=0.0):
     """
     트레이(가로 inner_l × 세로 inner_w)에 제품이 몇 칸(개) 배치되는지 계산.
+
+    피치(칸 중심간 거리)가 주어지면 그 값을 그대로 사용:
+        칸수 = ⌊트레이가로 ÷ 피치X⌋ × ⌊트레이세로 ÷ 피치Y⌋
+    피치가 0이면 '제품 크기 + 여유(gap)'로 자동 계산합니다.
 
         칸수 = ⌊(트레이가로+간격) ÷ (제품+간격)⌋ × ⌊(트레이세로+간격) ÷ (제품+간격)⌋
 
@@ -119,8 +123,18 @@ def tray_cell_count(product, tray, gap=0.0):
     - gap: 칸(제품) 사이 여유 간격(mm)
     반환: (칸수, (가로칸, 세로칸))
     """
-    a, b = sorted(product)[:2]      # 제품 바닥면 두 변
     L, W = tray["inner_l"], tray["inner_w"]
+
+    # 피치 지정 시: 도면 피치로 바로 계산 (양방향 중 최대)
+    if pitch_x > 0 and pitch_y > 0:
+        def pgrid(px, py):
+            return max(int(L // px), 0), max(int(W // py), 0)
+        g1 = pgrid(pitch_x, pitch_y)
+        g2 = pgrid(pitch_y, pitch_x)
+        na, nb = g1 if g1[0] * g1[1] >= g2[0] * g2[1] else g2
+        return na * nb, (na, nb)
+
+    a, b = sorted(product)[:2]      # 제품 바닥면 두 변
 
     def grid(pa, pb):
         if pa <= 0 or pb <= 0:
@@ -164,7 +178,8 @@ def trays_per_box(tray_l, tray_w, tray_thickness, box, wall_margin=0.0):
 
 
 def build_quote_rows(product, boxes, entity, use_best_orientation=True,
-                     unit_weight_g=0.0, part_name="", wall_margin=0.0, tray_gap=0.0):
+                     unit_weight_g=0.0, part_name="", wall_margin=0.0, tray_gap=0.0,
+                     tray_pitch_x=0.0, tray_pitch_y=0.0):
     """
     선택된 법인/분류의 모든 포장재에 대해 견적 행(row) 리스트를 생성.
     포장재 유형(pack_type)에 따라 적재수량 계산 방식이 다릅니다.
@@ -183,7 +198,8 @@ def build_quote_rows(product, boxes, entity, use_best_orientation=True,
 
         eff = 0.0
         if pt == "tray":
-            cells, tgrid = tray_cell_count(product, box, gap=tray_gap)
+            cells, tgrid = tray_cell_count(product, box, gap=tray_gap,
+                                           pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
             base_qty = cells
             arrange = f"{tgrid[0]}×{tgrid[1]} = {cells}칸"
             unit_type = "트레이"
