@@ -198,11 +198,44 @@ def fit_zipper_bag(product, bags):
     return min(cand, key=lambda x: x[0])[1] if cand else None
 
 
+def bag_layer_capacity(product, bag):
+    """지퍼백 1봉지에 제품이 '한 겹'으로 몇 개 깔리는지 (양방향 중 최대)."""
+    a, b = sorted(product)[:2]
+    L, W = bag["inner_l"], bag["inner_w"]
+
+    def f(x, y):
+        if x <= 0 or y <= 0:
+            return 0
+        return int(L // x) * int(W // y)
+
+    return max(f(a, b), f(b, a))
+
+
+def recommend_bag(product, bags, n_per_bag):
+    """
+    입수(n_per_bag)를 담을 수 있는 지퍼백을 카탈로그에서 추천.
+      - 한 겹 용량이 n 이상인 것 중 '가장 작은(면적)' 봉투를 우선 추천
+      - 없으면(여러 겹 필요) 용량이 가장 큰 봉투를 추천
+    반환: (추천 봉투 dict 또는 None, 한겹용량)
+    """
+    n = max(int(n_per_bag), 1)
+    single = [(bg["inner_l"] * bg["inner_w"], bg) for bg in bags
+              if bag_layer_capacity(product, bg) >= n]
+    if single:
+        bag = min(single, key=lambda x: x[0])[1]
+    elif bags:
+        bag = max(bags, key=lambda bg: bag_layer_capacity(product, bg))
+    else:
+        return None, 0
+    return bag, bag_layer_capacity(product, bag)
+
+
 def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_group="",
                          unit_weight_g=0.0, part_name="", wall_margin=0.0,
                          use_best=True, tray_cells=0, tray_grid=(0, 0),
                          tray_l=0.0, tray_w=0.0, tray_thickness=0.0,
-                         bag_name="", bag_count=1, bag_l=0.0, bag_w=0.0, bag_h=0.0):
+                         bag_name="", bag_count=1, bag_l=0.0, bag_w=0.0, bag_h=0.0,
+                         weight_limit_kg=10.0):
     """
     제품 → (포장재) → 박스 흐름으로 '박스 1개당 총 제품 수'를 박스별로 계산.
 
@@ -237,12 +270,15 @@ def build_packaging_rows(product, outer_boxes, entity, *, inner_mode, outer_grou
             method = f"벌크 3D {grid[0]}×{grid[1]}×{grid[2]}"
             dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "개"
 
-        # 무게 제한 (박스 허용중량 초과 방지)
-        w_cap = weight_cap_qty(box, unit_weight_g)
-        if w_cap is not None and w_cap < base_total:
-            total, limit = w_cap, "무게 제한"
+        # 무게 제한: 박스당 총중량이 weight_limit_kg(기본 10kg)을 넘지 않도록
+        if unit_weight_g and unit_weight_g > 0:
+            w_cap = int(weight_limit_kg * 1000 // unit_weight_g)
+            if w_cap < base_total:
+                total, limit = w_cap, f"무게 제한 ({weight_limit_kg:g}kg)"
+            else:
+                total, limit = base_total, "무게 OK"
         else:
-            total, limit = base_total, ("무게 OK" if unit_weight_g else "-")
+            total, limit = base_total, "-"
 
         total_w = round(total * unit_weight_g / 1000, 2) if unit_weight_g else 0.0
         cost = cost_per_box(box, entity, total)

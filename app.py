@@ -17,7 +17,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from data import ENTITIES, BOX_CATALOG, PACKAGING_CONFIG
-from calculations import build_packaging_rows, tray_cell_count, fit_zipper_bag
+from calculations import (build_packaging_rows, tray_cell_count,
+                          recommend_bag, bag_layer_capacity)
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
 
 st.set_page_config(
@@ -174,9 +175,13 @@ with st.sidebar:
     ph = c3.number_input("H", min_value=0.1, value=15.0, step=1.0)
     product = (pl, pw, ph)
 
-    unit_weight_g = st.number_input(
-        "제품 1개 무게 (g) · 0=무게 무시", min_value=0.0, value=0.0, step=1.0,
-        help="값을 넣으면 박스 허용중량을 넘지 않도록 적재수량을 제한합니다.")
+    w1, w2 = st.columns(2)
+    unit_weight_g = w1.number_input(
+        "제품 1개 무게 (g)", min_value=0.0, value=0.0, step=1.0,
+        help="0=무게 무시. 값을 넣으면 박스 총중량 한도를 넘지 않도록 제한합니다.")
+    weight_limit_kg = w2.number_input(
+        "박스 총중량 한도 (kg)", min_value=0.1, value=10.0, step=1.0,
+        help="박스 1개당 허용 총중량. 기본 10kg.")
 
     st.markdown("")
     sidebar_step(2, "포장 방식")
@@ -209,22 +214,29 @@ with st.sidebar:
                 "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
                 help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
 
-    # --- 지퍼백 설정 (지퍼백 선택 시) ---
+    # --- 지퍼백 설정 (지퍼백 선택 시) : 카탈로그에서 자동 추천 ---
     bag_count = 1
     bag_l = bag_w = bag_h = 0.0
+    bag_name = ""
     if is_bag:
-        _fit = fit_zipper_bag(product, BOX_CATALOG[entity_code][cfg["bag_group"]])
+        _bags = BOX_CATALOG[entity_code][cfg["bag_group"]]
         with st.expander("👜 지퍼백 설정", expanded=True):
             bag_count = st.number_input(
                 "지퍼백 1개당 제품 수 (입수)", min_value=1, value=1, step=1,
                 help="지퍼백 1봉지에 담는 제품 수. 예: 50, 100")
-            g1, g2, g3 = st.columns(3)
-            bag_l = g1.number_input("봉투 가로", min_value=0.0,
-                                    value=float(_fit["inner_l"]) if _fit else 100.0, step=5.0)
-            bag_w = g2.number_input("봉투 세로", min_value=0.0,
-                                    value=float(_fit["inner_w"]) if _fit else 140.0, step=5.0)
-            bag_h = g3.number_input("봉투 높이", min_value=0.0, value=20.0, step=5.0,
-                                    help="제품을 담은 지퍼백 1봉지의 두께(높이)")
+            _rec, _ = recommend_bag(product, _bags, bag_count)
+            _names = [f'{bg["박스명"]} · {bg["size"]}' for bg in _bags]
+            _idx = _bags.index(_rec) if _rec in _bags else 0
+            _sel = st.selectbox("지퍼백 규격 (자동 추천 · 변경 가능)", _names, index=_idx,
+                                help="입수에 맞춰 카탈로그에서 자동 추천됩니다.")
+            _chosen = _bags[_names.index(_sel)]
+            _per_layer = bag_layer_capacity(product, _chosen) or 1
+            _layers_in_bag = -(-bag_count // _per_layer)      # 올림
+            bag_l, bag_w = _chosen["inner_l"], _chosen["inner_w"]
+            bag_h = _layers_in_bag * max(product)
+            bag_name = _chosen["박스명"]
+            st.caption(f"✅ 추천: **{_chosen['박스명']}** ({_chosen['size']}) · "
+                       f"한 겹 {_per_layer}개 × {_layers_in_bag}겹")
 
     # --- 고급 옵션 (기본 접힘) ---
     with st.expander("⚙️ 고급 옵션"):
@@ -262,18 +274,13 @@ if is_tray and tray_l > 0 and tray_w > 0:
         product, {"inner_l": tray_l, "inner_w": tray_w},
         gap=tray_gap, pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
 
-# 적합 지퍼백 (지퍼백 선택 시)
-bag_name = ""
-if is_bag and cfg["bag_group"]:
-    _bag = fit_zipper_bag(product, BOX_CATALOG[entity_code][cfg["bag_group"]])
-    bag_name = _bag["박스명"] if _bag else "적합 규격 없음"
-
 rows = build_packaging_rows(
     product, outer_boxes, entity, inner_mode=inner_mode, outer_group=outer_group,
     unit_weight_g=unit_weight_g, part_name=part_name, wall_margin=wall_margin,
     use_best=use_best, tray_cells=tray_cells, tray_grid=tray_grid,
     tray_l=tray_l, tray_w=tray_w, tray_thickness=tray_thickness,
-    bag_name=bag_name, bag_count=bag_count, bag_l=bag_l, bag_w=bag_w, bag_h=bag_h)
+    bag_name=bag_name, bag_count=bag_count, bag_l=bag_l, bag_w=bag_w, bag_h=bag_h,
+    weight_limit_kg=weight_limit_kg)
 
 best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
 
