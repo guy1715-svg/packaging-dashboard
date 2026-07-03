@@ -16,7 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from data import ENTITIES, BOX_CATALOG, categories_for
-from calculations import build_quote_rows
+from calculations import build_quote_rows, tray_cell_count, trays_per_box
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
 
 st.set_page_config(
@@ -88,6 +88,16 @@ with st.sidebar:
                 "box_cost": 0, "max_weight_kg": 15,
             }
 
+        st.markdown("**제품→트레이→박스 통합 계산**")
+        tray_thickness = st.number_input(
+            "트레이 두께/높이 (mm)", min_value=0.0, value=15.0, step=1.0,
+            help="트레이 한 장의 두께. 박스에 트레이가 몇 단 쌓이는지 계산에 사용합니다.")
+        _cartons = BOX_CATALOG[entity_code].get("박스(Carton)", [])
+        _carton_names = [b["박스명"] for b in _cartons]
+        pack_box_name = st.selectbox(
+            "트레이를 담을 박스", _carton_names,
+            help="트레이를 포장할 카톤박스를 선택하세요.") if _carton_names else None
+
     use_best = st.toggle("최적 방향(회전) 적재 사용", value=True,
                          help="제품을 6방향으로 놓아보고 최대 적재수량을 계산합니다. "
                               "끄면 회전 없는 축정렬 기준(내경/외경)만 사용합니다.")
@@ -141,6 +151,30 @@ tab_calc, tab_form, tab_data = st.tabs(
 
 # --- 탭1: 적재 효율 ---
 with tab_calc:
+    # 트레이 분류: 제품→트레이→박스 통합 계산 패널
+    if is_tray and custom_tray is not None and pack_box_name:
+        st.subheader("🔗 제품 → 트레이 → 박스 통합 계산")
+        n_per_tray, ngrid = tray_cell_count(product, custom_tray, gap=tray_gap)
+        pack_box = next(b for b in _cartons if b["박스명"] == pack_box_name)
+        m_per_box, base_cnt, layers = trays_per_box(
+            tray_l, tray_w, tray_thickness, pack_box, wall_margin=wall_margin)
+        total = n_per_tray * m_per_box
+
+        cc = st.columns(4)
+        cc[0].metric("① 트레이당 제품 (N)", f"{n_per_tray:,} 개",
+                     help=f"트레이 {tray_l:g}×{tray_w:g} · 배열 {ngrid[0]}×{ngrid[1]}")
+        cc[1].metric("② 박스당 트레이 (M)", f"{m_per_box:,} 장",
+                     help=f"바닥 {base_cnt}장 × {layers}단  →  박스 {pack_box_name} "
+                          f"({pack_box['size']})")
+        cc[2].metric("③ 박스당 총 제품 (N×M)", f"{total:,} 개")
+        cc[3].metric("담을 박스", pack_box_name)
+
+        if m_per_box == 0:
+            st.warning("이 박스에는 트레이가 들어가지 않습니다. 트레이 두께/사이즈 또는 박스를 확인하세요.")
+        st.caption(f"계산: 트레이당 {n_per_tray:,}개 × 박스당 {m_per_box:,}장 "
+                   f"(바닥 {base_cnt}장 × 적층 {layers}단) = **박스 1개당 {total:,}개**")
+        st.divider()
+
     st.subheader(f"{category} · {entity_name} 적재 효율")
     if not rows:
         st.error("적재 가능한 박스가 없습니다. 제품 사이즈가 박스 내경보다 큰지 확인하세요.")

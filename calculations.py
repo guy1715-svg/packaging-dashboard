@@ -139,6 +139,30 @@ def tray_cell_count(product, tray, gap=0.0):
     return na * nb, (na, nb)
 
 
+def trays_per_box(tray_l, tray_w, tray_thickness, box, wall_margin=0.0):
+    """
+    박스 1개에 트레이가 몇 장 적재되는지 계산.
+
+        바닥면 트레이 수 = ⌊박스가로 ÷ 트레이가로⌋ × ⌊박스세로 ÷ 트레이세로⌋ (양방향 중 최대)
+        적층 단수        = ⌊박스높이 ÷ 트레이두께⌋
+        박스당 트레이     = 바닥면 트레이 수 × 적층 단수
+
+    반환: (총 트레이수, 바닥면 트레이수, 적층 단수)
+    """
+    L = max(box["inner_l"] - wall_margin, 0)
+    W = max(box["inner_w"] - wall_margin, 0)
+    H = max(box["inner_h"] - wall_margin, 0)
+
+    def per_layer(a, b):
+        if a <= 0 or b <= 0:
+            return 0
+        return int(L // a) * int(W // b)
+
+    base = max(per_layer(tray_l, tray_w), per_layer(tray_w, tray_l))
+    layers = int(H // tray_thickness) if tray_thickness > 0 else 0
+    return base * layers, base, layers
+
+
 def build_quote_rows(product, boxes, entity, use_best_orientation=True,
                      unit_weight_g=0.0, part_name="", wall_margin=0.0, tray_gap=0.0):
     """
