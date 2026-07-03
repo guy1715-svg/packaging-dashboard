@@ -102,51 +102,120 @@ def weight_cap_qty(box, unit_weight_g):
     return max(math.floor(box["max_weight_kg"] * 1000 / unit_weight_g), 0)
 
 
-def build_quote_rows(product, boxes, entity, use_best_orientation=True,
-                     unit_weight_g=0.0, part_name=""):
-    """
-    선택된 포장 방식/법인의 모든 박스에 대해 견적 행(row) 리스트를 생성.
-    UI 표시 및 Excel/PDF 내보내기에 공통으로 사용됩니다.
+def product_fits_2d(product, box):
+    """제품의 가장 작은 두 변이 포장재 바닥(inner_l × inner_w) 안에 들어가는지."""
+    dims = sorted(product)          # 제품을 눕혀 가장 납작하게
+    base = sorted([box["inner_l"], box["inner_w"]])
+    return dims[0] <= base[0] and dims[1] <= base[1]
 
-    unit_weight_g > 0 이면 무게 제한을 반영:
-        최종 적재수량 = MIN(부피 기준 개수, 무게 기준 개수)
+
+def tray_cell_count(product, tray, gap=0.0):
+    """
+    트레이(가로 inner_l × 세로 inner_w)에 제품이 몇 칸(개) 배치되는지 계산.
+
+        칸수 = ⌊(트레이가로+간격) ÷ (제품+간격)⌋ × ⌊(트레이세로+간격) ÷ (제품+간격)⌋
+
+    - 제품은 가장 납작하게 눕힌 두 변(제일 작은 두 치수)을 바닥면으로 사용
+    - gap: 칸(제품) 사이 여유 간격(mm)
+    반환: (칸수, (가로칸, 세로칸))
+    """
+    a, b = sorted(product)[:2]      # 제품 바닥면 두 변
+    L, W = tray["inner_l"], tray["inner_w"]
+
+    def grid(pa, pb):
+        if pa <= 0 or pb <= 0:
+            return 0, 0
+        na = max(int((L + gap) // (pa + gap)), 0)
+        nb = max(int((W + gap) // (pb + gap)), 0)
+        return na, nb
+
+    # 제품을 트레이 위에서 두 방향으로 돌려보고 더 많이 들어가는 쪽 채택
+    g1 = grid(a, b)
+    g2 = grid(b, a)
+    if g1[0] * g1[1] >= g2[0] * g2[1]:
+        na, nb = g1
+    else:
+        na, nb = g2
+    return na * nb, (na, nb)
+
+
+def build_quote_rows(product, boxes, entity, use_best_orientation=True,
+                     unit_weight_g=0.0, part_name="", wall_margin=0.0, tray_gap=0.0):
+    """
+    선택된 법인/분류의 모든 포장재에 대해 견적 행(row) 리스트를 생성.
+    포장재 유형(pack_type)에 따라 적재수량 계산 방식이 다릅니다.
+
+      box  : 3D 적재. 최종수량 = MIN(부피 기준, 무게 기준). wall_margin(벽두께 여유)
+             만큼 내경을 줄여 계산.
+      tray : 칸수(cells)를 적재수량으로 사용.
+      bag  : 1개입(제품이 봉투 규격에 들어가면 1, 아니면 0).
+
     part_name 은 각 행의 '품명' 열로 표기됩니다.
     """
     rows = []
     for box in boxes:
-        if use_best_orientation:
-            vol_qty, grid, orient = loading_qty_best_orientation(product, box)
-        else:
-            vol_qty, grid = loading_qty_axis_aligned(product, box)
-            orient = product
+        pt = box.get("pack_type", "box")
+        name = box.get("박스명", box.get("model", ""))
 
-        # 무게 제한 적용 → 최종 적재수량 & 제한 요인 판정
+        eff = 0.0
+        if pt == "tray":
+            cells, tgrid = tray_cell_count(product, box, gap=tray_gap)
+            base_qty = cells
+            arrange = f"{tgrid[0]}×{tgrid[1]} = {cells}칸"
+            unit_type = "트레이"
+            base_limit = "트레이 칸수" if cells else "제품이 트레이보다 큼"
+        elif pt == "bag":
+            base_qty = 1 if product_fits_2d(product, box) else 0
+            arrange = "1개입" if base_qty else "사이즈 초과"
+            unit_type = "지퍼백"
+            base_limit = "1개입" if base_qty else "사이즈 초과"
+        else:  # box (3D 적재)
+            eff_box = dict(box)
+            if wall_margin:
+                eff_box["inner_l"] = max(box["inner_l"] - wall_margin, 0)
+                eff_box["inner_w"] = max(box["inner_w"] - wall_margin, 0)
+                eff_box["inner_h"] = max(box["inner_h"] - wall_margin, 0)
+            if use_best_orientation:
+                base_qty, grid, orient = loading_qty_best_orientation(product, eff_box)
+            else:
+                base_qty, grid = loading_qty_axis_aligned(product, eff_box)
+                orient = product
+            arrange = f"{grid[0]}×{grid[1]}×{grid[2]}"
+            unit_type = "박스"
+            base_limit = "부피 제한" if unit_weight_g else "-"
+            eff = volume_efficiency(orient, eff_box, base_qty)
+
+        # 무게 제한 적용 (모든 유형 공통) → 최종 적재수량 & 제한 요인
         w_cap = weight_cap_qty(box, unit_weight_g)
-        if w_cap is not None and w_cap < vol_qty:
+        if w_cap is not None and w_cap < base_qty:
             qty = w_cap
             limit_factor = "무게 제한"
+            if pt == "box":
+                eff = volume_efficiency(orient, eff_box, qty)
         else:
-            qty = vol_qty
-            limit_factor = "부피 제한" if unit_weight_g else "-"
+            qty = base_qty
+            limit_factor = base_limit
 
         total_weight_kg = round(qty * unit_weight_g / 1000, 2) if unit_weight_g else 0.0
-        eff = volume_efficiency(orient, box, qty)
         cost = cost_per_box(box, entity, qty)
 
         rows.append({
             "품명": part_name if part_name else "-",
-            "박스명": box["model"],
-            "박스 내경(L×W×H)": f'{box["inner_l"]}×{box["inner_w"]}×{box["inner_h"]}',
-            "허용중량(kg)": box["max_weight_kg"],
-            "적재 배열(nL×nW×nH)": f"{grid[0]}×{grid[1]}×{grid[2]}",
+            "박스명": name,
+            "규격(Size)": box.get("size", f'{box["inner_l"]}*{box["inner_w"]}*{box["inner_h"]}'),
+            "유형": unit_type,
+            "재질/겹": box.get("재질", ""),
+            "적재 배열": arrange,
             "박스당 적재수량": qty,
             "제한 요인": limit_factor,
             "박스 총중량(kg)": total_weight_kg,
+            "허용중량(kg)": box.get("max_weight_kg", 0),
             "부피효율(%)": eff,
             "박스 단가": cost["box_cost"],
             "포장 인건비(가중)": cost["weighted_labor"],
             "박스당 총원가": cost["total_local"],
             "제품 1개당 원가(견적통화)": cost["unit_cost_quote"],
+            "비고": box.get("비고", ""),
             "구매 확정 단가": None,   # ← 구매팀 회신용 (기본 공란)
         })
     return rows
