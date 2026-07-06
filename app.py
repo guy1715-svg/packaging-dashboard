@@ -126,10 +126,16 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
 .stat.hi .v{color:#48e0aa;font-size:1.95rem;text-shadow:0 0 20px rgba(64,214,160,.3);}
 
-/* ---------- 탭 ---------- */
-.stTabs [data-baseweb="tab-list"]{gap:6px;border-bottom:1px solid var(--border);}
-.stTabs [data-baseweb="tab"]{padding:9px 18px;border-radius:9px 9px 0 0;font-weight:600;}
-.stTabs [aria-selected="true"]{background:rgba(57,135,229,.10);}
+/* ---------- 탭(라디오 기반) ---------- */
+div[role="radiogroup"]{gap:4px;border-bottom:1px solid var(--border);margin-bottom:.4rem;}
+div[role="radiogroup"] > label{background:transparent;border:1px solid transparent;
+  border-bottom:none;border-radius:10px 10px 0 0;padding:9px 18px;margin:0;
+  cursor:pointer;transition:background .15s,color .15s;font-weight:600;}
+div[role="radiogroup"] > label:hover{background:rgba(57,135,229,.08);}
+div[role="radiogroup"] > label > div:first-child{display:none;}   /* 라디오 동그라미 숨김 */
+div[role="radiogroup"] > label:has(input:checked){background:rgba(57,135,229,.12);
+  border-color:var(--border);color:#7ec8f3;
+  box-shadow:inset 0 -2px 0 var(--accent);}
 
 /* ---------- 견적 유도 CTA ---------- */
 .cta{display:flex;align-items:center;justify-content:space-between;gap:14px;
@@ -343,11 +349,15 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # 탭 구성
 # ---------------------------------------------------------------------------
-tab_calc, tab_form, tab_data = st.tabs(
-    ["📊 적재 효율 계산", "📄 구매팀 견적 양식", "🗄️ 기준 데이터(박스 리스트)"])
+VIEWS = ["📊 적재 효율 계산", "📄 구매팀 견적 양식", "🗄️ 기준 데이터(박스 리스트)"]
+if "active_view" not in st.session_state:
+    st.session_state.active_view = VIEWS[0]
+
+view = st.radio("보기", VIEWS, key="active_view",
+                horizontal=True, label_visibility="collapsed")
 
 # --- 탭1: 적재 효율 ---
-with tab_calc:
+if view == VIEWS[0]:
     section(f"제품 → {inner_mode} → {outer_group}")
 
     if not rows or best_row is None:
@@ -415,10 +425,12 @@ with tab_calc:
         st.markdown(
             '<div class="cta"><div>'
             '<div class="t">📄 이 구성으로 견적 요청서를 만들 준비가 됐어요</div>'
-            '<div class="d">상단 <b>구매팀 견적 양식</b> 탭에서 Excel · PDF로 내보내고 '
-            "'구매 확정 단가'까지 받을 수 있어요.</div>"
-            '</div><div class="go">구매팀 견적 양식 →</div></div>',
-            unsafe_allow_html=True)
+            '<div class="d">아래 버튼을 누르면 <b>구매팀 견적 양식</b> 화면으로 이동해 '
+            "Excel · PDF로 내보내고 '구매 확정 단가'까지 받을 수 있어요.</div>"
+            '</div></div>', unsafe_allow_html=True)
+        st.button("📄 구매팀 견적 양식으로 이동  →", type="primary",
+                  use_container_width=True,
+                  on_click=lambda: st.session_state.update(active_view=VIEWS[1]))
         with st.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
                 "- **없음(벌크)**: 제품을 박스에 직접 3D 적재 "
@@ -428,7 +440,7 @@ with tab_calc:
                 "- **무게 입력 시**: 박스 허용중량을 넘지 않도록 제한 → '제한 요인'에 표시")
 
 # --- 탭2: 견적 양식 + 다운로드 ---
-with tab_form:
+elif view == VIEWS[1]:
     section("구매팀 전달용 표준 견적 요청서")
     header_info = default_header_info("성우", entity, outer_group, product,
                                       part_name=part_name, unit_weight_g=unit_weight_g,
@@ -478,7 +490,7 @@ with tab_form:
             )
 
 # --- 탭3: 기준 데이터 열람 ---
-with tab_data:
+else:
     section("표준 포장재 카탈로그 (기준 데이터)")
     st.caption("실제 값 수정은 `data.py`의 리스트(CARTONS·DANPLA·PLASTIC·ZIPPERS·TRAYS)에서 관리합니다.")
     view = st.selectbox("분류 선택", list(BOX_CATALOG.keys()))
