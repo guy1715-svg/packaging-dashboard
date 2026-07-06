@@ -16,9 +16,10 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from data import ENTITIES, BOX_CATALOG, PACKAGING_CONFIG
+from data import (DEFAULT_ENTITY, BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
+                  BAG_GROUP, TRAY_GROUP)
 from calculations import (build_packaging_rows, tray_cell_count,
-                          recommend_bag, bag_layer_capacity)
+                          fit_zipper_bag, bag_layer_capacity)
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
 
 st.set_page_config(
@@ -147,7 +148,7 @@ def packing_image(cols, rows_, layers, unit, box_name, total):
 # ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
-st.title("📦 성우전자 · 성우비나 포장 견적 대시보드")
+st.title("📦 성우 포장 견적 대시보드")
 st.caption("포장 사양 입력 → 적재 효율 자동 계산 → 구매팀 전달용 견적 요청서 생성")
 
 # ---------------------------------------------------------------------------
@@ -160,10 +161,6 @@ def sidebar_step(n, title):
 
 with st.sidebar:
     sidebar_step(1, "기본 입력")
-
-    entity_name = st.selectbox("대상 법인", list(ENTITIES.keys()))
-    entity_code = ENTITIES[entity_name]["code"]
-    cfg = PACKAGING_CONFIG[entity_code]
 
     part_name = st.text_input("품명 (제품명/품번)", value="",
                               placeholder="예: SW-CONN-0250")
@@ -186,9 +183,9 @@ with st.sidebar:
     st.markdown("")
     sidebar_step(2, "포장 방식")
 
-    inner_mode = st.selectbox("포장재 선택 (안쪽)", cfg["inner_options"],
+    inner_mode = st.selectbox("포장재 선택 (안쪽)", INNER_OPTIONS,
                               help="제품을 담는 1차 포장재. 없음=벌크로 박스에 직접 적재")
-    outer_group = st.selectbox("박스 종류 선택 (바깥)", cfg["outer_groups"],
+    outer_group = st.selectbox("박스 종류 선택 (바깥)", OUTER_GROUPS,
                                help="제품/트레이를 담는 최종 박스 종류")
 
     is_tray = "트레이" in inner_mode
@@ -214,29 +211,32 @@ with st.sidebar:
                 "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
                 help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
 
-    # --- 지퍼백 설정 (지퍼백 선택 시) : 카탈로그에서 자동 추천 ---
+    # --- 지퍼백 설정 (지퍼백 선택 시) : 규격·입수 모두 자동 추천 ---
     bag_count = 1
     bag_l = bag_w = bag_h = 0.0
     bag_name = ""
     if is_bag:
-        _bags = BOX_CATALOG[entity_code][cfg["bag_group"]]
+        _bags = BOX_CATALOG[BAG_GROUP]
         with st.expander("👜 지퍼백 설정", expanded=True):
-            bag_count = st.number_input(
-                "지퍼백 1개당 제품 수 (입수)", min_value=1, value=1, step=1,
-                help="지퍼백 1봉지에 담는 제품 수. 예: 50, 100")
-            _rec, _ = recommend_bag(product, _bags, bag_count)
+            # 규격 추천: 제품이 들어가는 가장 작은 봉투
+            _fit = fit_zipper_bag(product, _bags) or (_bags[-1] if _bags else None)
             _names = [f'{bg["박스명"]} · {bg["size"]}' for bg in _bags]
-            _idx = _bags.index(_rec) if _rec in _bags else 0
+            _idx = _bags.index(_fit) if _fit in _bags else 0
             _sel = st.selectbox("지퍼백 규격 (자동 추천 · 변경 가능)", _names, index=_idx,
-                                help="입수에 맞춰 카탈로그에서 자동 추천됩니다.")
+                                help="제품이 들어가는 최소 규격을 자동 추천합니다.")
             _chosen = _bags[_names.index(_sel)]
             _per_layer = bag_layer_capacity(product, _chosen) or 1
+            st.caption(f"✅ 추천 입수: **한 봉지 {_per_layer}개** "
+                       f"(봉투 {_chosen['size']}에 한 겹 가득)")
+            _override = st.checkbox("입수 직접 지정", value=False,
+                                    help="추천값 대신 원하는 입수를 직접 넣습니다.")
+            bag_count = st.number_input(
+                "지퍼백 1개당 제품 수 (입수)", min_value=1, value=int(_per_layer),
+                step=1, disabled=not _override) if _override else int(_per_layer)
             _layers_in_bag = -(-bag_count // _per_layer)      # 올림
             bag_l, bag_w = _chosen["inner_l"], _chosen["inner_w"]
             bag_h = _layers_in_bag * max(product)
             bag_name = _chosen["박스명"]
-            st.caption(f"✅ 추천: **{_chosen['박스명']}** ({_chosen['size']}) · "
-                       f"한 겹 {_per_layer}개 × {_layers_in_bag}겹")
 
     # --- 고급 옵션 (기본 접힘) ---
     with st.expander("⚙️ 고급 옵션"):
@@ -247,25 +247,17 @@ with st.sidebar:
             help="박스 규격이 외경일 때, 벽두께만큼 빼고 계산합니다. (0=규격 그대로)")
 
     st.markdown("")
-    sidebar_step(3, "단가 · 환율")
-
-    base = ENTITIES[entity_name]
-    entity = copy.deepcopy(base)
-    with st.expander("💱 단가 · 환율 (법인별)"):
-        entity["fx_rate"] = st.number_input(
-            f'환율 (1 {base["base_currency"]} → {base["quote_currency"]})',
-            min_value=0.0, value=float(base["fx_rate"]), step=0.001, format="%.4f")
-        entity["labor_weight"] = st.number_input(
-            "인건비 가중치 (본사 1.0 기준)",
-            min_value=0.0, value=float(base["labor_weight"]), step=0.05)
+    entity = copy.deepcopy(DEFAULT_ENTITY)
+    with st.expander("💰 포장 인건비 (선택)"):
         entity["packing_labor_per_box"] = st.number_input(
-            f'박스당 포장 인건비 ({base["base_currency"]})',
-            min_value=0.0, value=float(base["packing_labor_per_box"]), step=100.0)
+            "박스당 포장 인건비 (KRW)", min_value=0.0,
+            value=float(DEFAULT_ENTITY["packing_labor_per_box"]), step=100.0,
+            help="박스당 총원가 = 박스 단가 + 포장 인건비")
 
 # ---------------------------------------------------------------------------
 # 메인 - 계산 (제품 → 포장재 → 박스)
 # ---------------------------------------------------------------------------
-outer_boxes = BOX_CATALOG[entity_code][outer_group]
+outer_boxes = BOX_CATALOG[outer_group]
 
 # 트레이 칸수 (범용트레이 선택 시)
 tray_cells, tray_grid = 0, (0, 0)
@@ -287,9 +279,10 @@ best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
 # 컨텍스트 칩 바
 _wchip = f'<span class="chip"><b>무게</b> {unit_weight_g:g} g</span>' if unit_weight_g else ""
 _bchip = f'<span class="chip"><b>지퍼백</b> {bag_name}</span>' if (is_bag and bag_name) else ""
+_pchip = f'<span class="chip"><b>품명</b> {part_name}</span>' if part_name else ""
 st.markdown(
     '<div class="ctxbar">'
-    f'<span class="chip"><b>법인</b> {entity_name}</span>'
+    f'{_pchip}'
     f'<span class="chip"><b>포장재</b> {inner_mode}</span>'
     f'<span class="chip"><b>박스</b> {outer_group}</span>'
     f'<span class="chip"><b>제품(mm)</b> {pl:g}×{pw:g}×{ph:g}</span>'
@@ -318,9 +311,9 @@ with tab_calc:
             cards.append({"label": "지퍼백 1개당 (입수)", "value": f"{bag_count:,}",
                           "unit": "개",
                           "sub": f"봉투 {bag_l:g}×{bag_w:g}×{bag_h:g} · 적합 {bag_name}"})
-        cards.append({"label": f"박스당 총 제품 · {best_row['박스명']}",
+        cards.append({"label": f"🏆 추천 박스 · {best_row['박스명']}",
                       "value": f"{best_row['박스당 총 제품']:,}", "unit": "개",
-                      "sub": f"규격 {best_row['규격(Size)']}",
+                      "sub": f"규격 {best_row['규격(Size)']} · 최다 적재",
                       "op": "→" if (is_tray or is_bag) else "", "variant": "total"})
         cards.append({"label": "검토 박스", "value": f"{len(rows)}", "unit": "종",
                       "sub": outer_group})
@@ -336,11 +329,14 @@ with tab_calc:
         st.markdown("")
 
         df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
+        _mx = df["박스당 총 제품"].max()
+        df.insert(0, "추천", df["박스당 총 제품"].apply(
+            lambda v: "🏆" if v == _mx and v > 0 else ""))
         section(f"{outer_group} · 박스별 총 제품 수")
-        show_cols = ["박스명", "규격(Size)", "포장재", "적재 방식",
+        show_cols = ["추천", "박스명", "규격(Size)", "포장재", "적재 방식",
                      "박스당 총 제품", "제한 요인", "비고"]
         if unit_weight_g:
-            show_cols.insert(5, "박스 총중량(kg)")
+            show_cols.insert(6, "박스 총중량(kg)")
         st.dataframe(
             df[show_cols], use_container_width=True, hide_index=True,
             column_config={
@@ -361,7 +357,7 @@ with tab_calc:
 # --- 탭2: 견적 양식 + 다운로드 ---
 with tab_form:
     section("구매팀 전달용 표준 견적 요청서")
-    header_info = default_header_info(entity_name, entity, outer_group, product,
+    header_info = default_header_info("성우", entity, outer_group, product,
                                       part_name=part_name, unit_weight_g=unit_weight_g,
                                       inner_mode=inner_mode, bag_name=bag_name)
 
@@ -395,7 +391,7 @@ with tab_form:
             st.download_button(
                 "⬇️ Excel 견적 요청서 (.xlsx)",
                 data=to_excel_bytes(header_info, export_rows),
-                file_name=f'견적요청서_{entity_code}_{outer_group}.xlsx',
+                file_name=f'견적요청서_{outer_group}.xlsx',
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
@@ -403,27 +399,17 @@ with tab_form:
             st.download_button(
                 "⬇️ PDF 견적 요청서 (.pdf)",
                 data=to_pdf_bytes(header_info, export_rows),
-                file_name=f'견적요청서_{entity_code}_{outer_group}.pdf',
+                file_name=f'견적요청서_{outer_group}.pdf',
                 mime="application/pdf",
                 use_container_width=True,
             )
 
 # --- 탭3: 기준 데이터 열람 ---
 with tab_data:
-    section("표준 박스 카탈로그 (기준 데이터)")
-    st.caption("실제 값 수정은 `data.py`의 BOX_CATALOG / ENTITIES 딕셔너리에서 관리합니다.")
-    st.markdown(f"**{outer_group} · {entity_name}**")
-    st.dataframe(pd.DataFrame(outer_boxes), use_container_width=True, hide_index=True)
-
-    st.markdown("**법인 기준 정보 (현재 적용값 · 사이드바 오버라이드 반영)**")
-    st.json({
-        "법인": entity_name,
-        "코드": entity["code"],
-        "환율": entity["fx_rate"],
-        "인건비 가중치": entity["labor_weight"],
-        "박스당 포장 인건비": entity["packing_labor_per_box"],
-        "견적 통화": entity["quote_currency"],
-    })
+    section("표준 포장재 카탈로그 (기준 데이터)")
+    st.caption("실제 값 수정은 `data.py`의 리스트(CARTONS·DANPLA·PLASTIC·ZIPPERS·TRAYS)에서 관리합니다.")
+    view = st.selectbox("분류 선택", list(BOX_CATALOG.keys()))
+    st.dataframe(pd.DataFrame(BOX_CATALOG[view]), use_container_width=True, hide_index=True)
 
 st.divider()
-st.caption("© 성우전자/성우비나 개발팀 · 포장 사양 견적 대시보드")
+st.caption("© 성우 개발팀 · 포장 사양 견적 대시보드")
