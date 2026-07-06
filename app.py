@@ -14,7 +14,7 @@
 import copy
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
+import plotly.graph_objects as go
 
 from data import (DEFAULT_ENTITY, BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
                   BAG_GROUP, TRAY_GROUP)
@@ -109,8 +109,22 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .kpi-op{display:flex;align-items:center;font-size:1.6rem;color:#5b6b7d;font-weight:800;}
 @keyframes kpiIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
-/* ---------- 배치도 iframe ---------- */
-[data-testid="stIFrame"]{border-radius:14px;}
+/* ---------- 배치도 (Plotly 컨테이너 + 수치 카드) ---------- */
+[data-testid="stPlotlyChart"]{border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;background:linear-gradient(160deg,#161b22,#12161d);padding:6px;
+  box-shadow:0 12px 32px -18px rgba(0,0,0,.75);}
+.stat{background:linear-gradient(160deg,#1a2029,#141922);border:1px solid #2a3140;
+  border-radius:13px;padding:13px 16px;margin-bottom:12px;position:relative;overflow:hidden;
+  box-shadow:0 6px 18px -12px rgba(0,0,0,.6);}
+.stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);}
+.stat .l{font-size:.74rem;color:var(--muted);margin-bottom:5px;font-weight:600;}
+.stat .v{font-size:1.5rem;font-weight:800;color:var(--text);
+  font-variant-numeric:tabular-nums;line-height:1.05;}
+.stat .u{font-size:.8rem;color:var(--muted);font-weight:600;margin-left:4px;}
+.stat.hi{background:linear-gradient(160deg,rgba(25,158,112,.22),#141c1c 62%);
+  border-color:rgba(64,214,160,.45);}
+.stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
+.stat.hi .v{color:#48e0aa;font-size:1.95rem;text-shadow:0 0 20px rgba(64,214,160,.3);}
 
 /* ---------- 탭 ---------- */
 .stTabs [data-baseweb="tab-list"]{gap:6px;border-bottom:1px solid var(--border);}
@@ -154,44 +168,32 @@ def section(title):
                 unsafe_allow_html=True)
 
 
-def packing_image(cols, rows_, layers, unit, box_name, total):
-    """박스 1개의 윗면 적재 배치를 그린 SVG 이미지 (한 층 기준 + 단수 표기)."""
-    cols, rows_, layers = int(cols), int(rows_), max(int(layers), 1)
-    if cols <= 0 or rows_ <= 0:
-        st.info("이 조합은 적재되지 않아 이미지를 표시할 수 없습니다.")
-        return
-    cap = 22
-    dc, dr = min(cols, cap), min(rows_, cap)
-    trunc = cols > cap or rows_ > cap
-    cell, gap, pad, top = 20, 4, 22, 54
-    w = pad * 2 + dc * (cell + gap) - gap
-    h = top + pad + dr * (cell + gap) - gap + pad
-    w = max(w, 320)
-    rects = []
-    for r in range(dr):
-        for c in range(dc):
-            x = pad + c * (cell + gap)
-            y = top + r * (cell + gap)
-            rects.append(
-                f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" '
-                f'fill="#3987e5" fill-opacity="0.9" stroke="#7ec8f3" stroke-width="1"/>')
-    caption = f"윗면 {cols}×{rows_} = {cols*rows_} {unit}/층  ·  {layers}층"
-    if trunc:
-        caption += "  (그림은 일부만 표시)"
-    svg = f'''
-<div style="background:#161b22;border:1px solid #2a3140;border-radius:14px;
-     padding:14px 16px;overflow-x:auto;font-family:system-ui,sans-serif;">
-  <div style="color:#e6edf3;font-weight:700;font-size:15px;margin-bottom:2px;">
-     📦 {box_name} · 적재 배치도</div>
-  <div style="color:#8b98a5;font-size:12.5px;margin-bottom:10px;">
-     {caption}  →  <b style="color:#40d6a0;">박스당 {total:,} 개</b></div>
-  <svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="6" y="{top-8}" width="{w-12}" height="{h-top-4}" rx="10"
-          fill="none" stroke="#2a3140" stroke-width="2"/>
-    {''.join(rects)}
-  </svg>
-</div>'''
-    components.html(svg, height=h + 70, scrolling=True)
+def packing_fig(cols, rows_, unit):
+    """박스 윗면 한 층의 적재 배치를 Plotly 히트맵 격자로 그림 (호버 인터랙션)."""
+    cap = 40
+    dc, dr = max(min(int(cols), cap), 1), max(min(int(rows_), cap), 1)
+    z = [[1] * dc for _ in range(dr)]
+    fig = go.Figure(go.Heatmap(
+        z=z, x=list(range(1, dc + 1)), y=list(range(1, dr + 1)),
+        xgap=3, ygap=3, showscale=False,
+        colorscale=[[0, "#3987e5"], [1, "#3987e5"]],
+        hovertemplate=f"열 %{{x}} · 행 %{{y}}<br>{unit} 위치<extra></extra>",
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=6, r=6, t=6, b=6), height=380,
+        xaxis=dict(visible=False, constrain="domain"),
+        yaxis=dict(visible=False, scaleanchor="x", scaleratio=1, autorange="reversed"),
+        hoverlabel=dict(bgcolor="#1c2432", bordercolor="#3987e5",
+                        font=dict(color="#e6edf3", size=12)),
+    )
+    return fig
+
+
+def stat_card(label, value, unit="", hi=False):
+    return (f'<div class="stat {"hi" if hi else ""}">'
+            f'<div class="l">{label}</div>'
+            f'<div class="v">{value}<span class="u">{unit}</span></div></div>')
 
 
 # ---------------------------------------------------------------------------
@@ -371,10 +373,26 @@ with tab_calc:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
         st.markdown("")
 
-        # 적재 배치 이미지 (최다 적재 박스 기준)
-        section("적재 배치도")
-        packing_image(best_row["_cols"], best_row["_rows"], best_row["_layers"],
-                      best_row["_unit"], best_row["박스명"], best_row["박스당 총 제품"])
+        # 적재 배치도 (좌: Plotly 시각화 / 우: 수치 카드)
+        section(f"적재 배치도 · {best_row['박스명']}")
+        _c, _r = int(best_row["_cols"]), int(best_row["_rows"])
+        _lay, _u = int(best_row["_layers"]), best_row["_unit"]
+        viz, stt = st.columns([2, 1], gap="large")
+        with viz:
+            if _c > 0 and _r > 0:
+                st.plotly_chart(packing_fig(_c, _r, _u), use_container_width=True,
+                                config={"displayModeBar": False})
+                st.caption(f"윗면 {_c}×{_r} 격자 · 마우스를 올리면 위치가 표시됩니다"
+                           + ("  (40×40까지만 표시)" if _c > 40 or _r > 40 else ""))
+            else:
+                st.info("이 조합은 적재되지 않습니다.")
+        with stt:
+            st.markdown(
+                stat_card("박스당 총 제품", f"{best_row['박스당 총 제품']:,}", "개", hi=True)
+                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_c * _r:,}", _u)
+                + stat_card("층수 (적층)", f"{_lay:,}", "층")
+                + stat_card("적재 방식", best_row["적재 방식"], ""),
+                unsafe_allow_html=True)
         st.markdown("")
 
         df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
