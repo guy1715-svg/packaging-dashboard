@@ -37,48 +37,97 @@ st.markdown("""
   --bg:#0d1117; --surface:#161b22; --surface2:#1c2432; --border:#2a3140;
   --text:#e6edf3; --muted:#8b98a5; --accent:#3987e5; --accent2:#199e70; --warn:#c98500;
 }
-.block-container{padding-top:1.6rem;padding-bottom:2rem;max-width:1320px;}
-h1,h2,h3{letter-spacing:-.01em;}
-h1{font-size:1.85rem !important;}
-/* 상단 컨텍스트 칩 바 */
-.ctxbar{display:flex;gap:8px;flex-wrap:wrap;margin:.2rem 0 1rem;}
+.block-container{padding-top:1.4rem;padding-bottom:2.6rem;max-width:1340px;}
+h1{font-size:1.9rem !important;font-weight:800;}
+h1,h2,h3{letter-spacing:-.015em;}
+
+/* ---------- 사이드바 ---------- */
+section[data-testid="stSidebar"]{border-right:1px solid var(--border);
+  background:linear-gradient(180deg,#12161d,#0f1319);}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:.55rem;}
+section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]{gap:.5rem;}
+section[data-testid="stSidebar"] label p,
+section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
+  font-size:.78rem !important;color:var(--muted) !important;font-weight:600;margin-bottom:1px;}
+[data-baseweb="input"],[data-baseweb="select"]>div{
+  background:var(--surface2) !important;border-radius:9px !important;
+  border:1px solid var(--border) !important;}
+[data-baseweb="input"]:focus-within{border-color:var(--accent) !important;
+  box-shadow:0 0 0 3px rgba(57,135,229,.18) !important;}
+.stNumberInput input,.stTextInput input{font-variant-numeric:tabular-nums;}
+[data-testid="stExpander"]{border:1px solid var(--border);border-radius:10px;
+  background:var(--surface);}
+
+/* 스텝 배지 */
+.step{display:flex;align-items:center;gap:9px;margin:.25rem 0 .4rem;font-weight:800;
+  font-size:1rem;color:var(--text);}
+.step .num{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;
+  border-radius:7px;background:linear-gradient(135deg,#3987e5,#2a6fc4);color:#fff;
+  font-size:.8rem;font-weight:800;box-shadow:0 2px 8px rgba(57,135,229,.4);}
+
+/* ---------- 컨텍스트 칩 ---------- */
+.ctxbar{display:flex;gap:8px;flex-wrap:wrap;margin:.1rem 0 1.1rem;}
 .chip{background:var(--surface);border:1px solid var(--border);border-radius:999px;
   padding:5px 13px;font-size:.82rem;color:var(--text);white-space:nowrap;}
 .chip b{color:var(--muted);font-weight:600;margin-right:6px;font-size:.76rem;}
-/* 섹션 헤더 */
-.sec{display:flex;align-items:center;gap:9px;margin:.4rem 0 .5rem;font-weight:700;
-  font-size:1.06rem;color:var(--text);}
+
+/* ---------- 섹션 헤더 ---------- */
+.sec{display:flex;align-items:center;gap:9px;margin:1.15rem 0 .6rem;font-weight:750;
+  font-size:1.08rem;color:var(--text);}
 .sec .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
   box-shadow:0 0 0 4px rgba(57,135,229,.16);}
-/* KPI 카드 행 */
-.kpi-row{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin:.3rem 0 .2rem;}
-.kpi-card{flex:1;min-width:150px;background:#161b22;border:1px solid #2a3140;
-  border-radius:14px;padding:15px 18px;position:relative;overflow:hidden;
-  animation:kpiIn .45s cubic-bezier(.2,.7,.3,1) both;
-  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
-.kpi-card:hover{transform:translateY(-3px);border-color:var(--accent);
-  box-shadow:0 6px 22px rgba(0,0,0,.35);}
-.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);}
-.kpi-card.total{background:linear-gradient(180deg,rgba(25,158,112,.16),var(--surface));
-  border-color:var(--accent2);}
-.kpi-card.total::before{background:var(--accent2);}
-.kpi-label{font-size:.78rem;color:var(--muted);margin-bottom:7px;}
-.kpi-value{font-size:2.05rem;font-weight:750;color:var(--text);line-height:1.05;
-  font-variant-numeric:tabular-nums;}
-.kpi-card.total .kpi-value{color:#40d6a0;}
-.kpi-unit{font-size:.92rem;font-weight:600;color:var(--muted);margin-left:5px;}
-.kpi-sub{font-size:.73rem;color:var(--muted);margin-top:7px;}
-.kpi-op{display:flex;align-items:center;font-size:1.5rem;color:var(--muted);font-weight:700;}
-@keyframes kpiIn{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:none;}}
-/* 사이드바 스텝 배지 */
-.step{display:flex;align-items:center;gap:9px;margin:.1rem 0 .3rem;font-weight:700;
-  font-size:.98rem;color:var(--text);}
-.step .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
-  border-radius:50%;background:var(--accent);color:#06121f;font-size:.8rem;font-weight:800;}
-section[data-testid="stSidebar"]{border-right:1px solid var(--border);}
-/* 탭 */
-.stTabs [data-baseweb="tab-list"]{gap:4px;}
-.stTabs [data-baseweb="tab"]{padding:8px 16px;border-radius:9px 9px 0 0;}
+
+/* ---------- KPI 카드 ---------- */
+.kpi-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;margin:.2rem 0 .3rem;}
+.kpi-card{flex:1;min-width:160px;
+  background:linear-gradient(160deg,#1a2029,#141922);
+  border:1px solid #2a3140;border-radius:16px;padding:18px 20px;
+  position:relative;overflow:hidden;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px -14px rgba(0,0,0,.6);
+  animation:kpiIn .5s cubic-bezier(.2,.7,.3,1) both;
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+.kpi-card:hover{transform:translateY(-4px);border-color:#3d4757;
+  box-shadow:0 16px 36px -16px rgba(0,0,0,.75);}
+.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--accent),#2a6fc4);}
+.kpi-card::after{content:"";position:absolute;right:-42px;top:-42px;width:120px;height:120px;
+  border-radius:50%;background:radial-gradient(circle,rgba(57,135,229,.14),transparent 70%);}
+.kpi-card.total{flex:1.35;
+  background:linear-gradient(160deg,rgba(25,158,112,.22),#141c1c 62%);
+  border-color:rgba(64,214,160,.45);
+  box-shadow:0 0 0 1px rgba(64,214,160,.12) inset,0 14px 40px -16px rgba(20,120,84,.6);}
+.kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
+.kpi-card.total::after{background:radial-gradient(circle,rgba(64,214,160,.22),transparent 70%);}
+.kpi-label{font-size:.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;
+  position:relative;z-index:1;}
+.kpi-value{font-size:2.15rem;font-weight:800;color:var(--text);line-height:1.02;
+  font-variant-numeric:tabular-nums;position:relative;z-index:1;}
+.kpi-card.total .kpi-value{font-size:2.7rem;color:#48e0aa;
+  text-shadow:0 0 26px rgba(64,214,160,.35);}
+.kpi-unit{font-size:.95rem;font-weight:600;color:var(--muted);margin-left:5px;}
+.kpi-sub{font-size:.74rem;color:var(--muted);margin-top:9px;position:relative;z-index:1;}
+.kpi-op{display:flex;align-items:center;font-size:1.6rem;color:#5b6b7d;font-weight:800;}
+@keyframes kpiIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+/* ---------- 배치도 iframe ---------- */
+[data-testid="stIFrame"]{border-radius:14px;}
+
+/* ---------- 탭 ---------- */
+.stTabs [data-baseweb="tab-list"]{gap:6px;border-bottom:1px solid var(--border);}
+.stTabs [data-baseweb="tab"]{padding:9px 18px;border-radius:9px 9px 0 0;font-weight:600;}
+.stTabs [aria-selected="true"]{background:rgba(57,135,229,.10);}
+
+/* ---------- 견적 유도 CTA ---------- */
+.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin:.2rem 0 .3rem;padding:16px 20px;border-radius:14px;
+  background:linear-gradient(100deg,rgba(57,135,229,.16),rgba(25,158,112,.10));
+  border:1px solid #2f4560;transition:border-color .16s;}
+.cta:hover{border-color:#3d6ea0;}
+.cta .t{color:var(--text);font-weight:700;font-size:.98rem;}
+.cta .d{color:var(--muted);font-size:.8rem;margin-top:3px;}
+.cta .go{white-space:nowrap;background:linear-gradient(135deg,#3987e5,#2a6fc4);
+  color:#fff;font-weight:700;font-size:.9rem;padding:10px 18px;border-radius:10px;
+  box-shadow:0 6px 18px -6px rgba(57,135,229,.7);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -344,9 +393,15 @@ with tab_calc:
             },
         )
 
-        cta, info_ = st.columns([1, 1])
-        cta.info("📄 견적서로 만들려면 상단 **'구매팀 견적 양식'** 탭으로 이동하세요.")
-        with info_.expander("ℹ️ 계산 방식 보기"):
+        st.markdown("")
+        st.markdown(
+            '<div class="cta"><div>'
+            '<div class="t">📄 이 구성으로 견적 요청서를 만들 준비가 됐어요</div>'
+            '<div class="d">상단 <b>구매팀 견적 양식</b> 탭에서 Excel · PDF로 내보내고 '
+            "'구매 확정 단가'까지 받을 수 있어요.</div>"
+            '</div><div class="go">구매팀 견적 양식 →</div></div>',
+            unsafe_allow_html=True)
+        with st.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
                 "- **없음(벌크)**: 제품을 박스에 직접 3D 적재 "
                 "⌊박스 ÷ 제품⌋ (최적 방향 6방향 중 최대)\n"
