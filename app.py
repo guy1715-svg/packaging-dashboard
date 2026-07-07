@@ -387,20 +387,28 @@ if view == VIEWS[0]:
         section(f"적재 배치도 · {best_row['박스명']}")
         _c, _r = int(best_row["_cols"]), int(best_row["_rows"])
         _lay, _u = int(best_row["_layers"]), best_row["_unit"]
+        _total = best_row["박스당 총 제품"]
+        _per_layer = _c * _r
+        _geom = _per_layer * _lay                       # 부피 기준 최대
+        _capped = _per_layer > 0 and _total < _geom     # 무게 한도 등으로 줄었는지
+        _eff_layers = -(-_total // _per_layer) if _per_layer > 0 else 0
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
             if _c > 0 and _r > 0:
                 st.plotly_chart(packing_fig(_c, _r, _u), use_container_width=True,
                                 config={"displayModeBar": False})
-                st.caption(f"윗면 {_c}×{_r} 격자 · 마우스를 올리면 위치가 표시됩니다"
-                           + ("  (40×40까지만 표시)" if _c > 40 or _r > 40 else ""))
+                cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개까지 가능하나 "
+                            f"'{best_row['제한 요인']}'으로 {_total:,}개만 적재") if _capped else ""
+                st.caption(f"윗면 {_c}×{_r} 격자 · 마우스를 올리면 위치 표시"
+                           + ("  (40×40까지만 표시)" if _c > 40 or _r > 40 else "")
+                           + cap_note)
             else:
                 st.info("이 조합은 적재되지 않습니다.")
         with stt:
             st.markdown(
-                stat_card("박스당 총 제품", f"{best_row['박스당 총 제품']:,}", "개", hi=True)
-                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_c * _r:,}", _u)
-                + stat_card("층수 (적층)", f"{_lay:,}", "층")
+                stat_card("박스당 총 제품", f"{_total:,}", "개", hi=True)
+                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u)
+                + stat_card("실제 적층 단수", f"{_eff_layers:,}", "층")
                 + stat_card("적재 방식", best_row["적재 방식"], ""),
                 unsafe_allow_html=True)
         st.markdown("")
