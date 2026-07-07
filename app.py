@@ -174,24 +174,67 @@ def section(title):
                 unsafe_allow_html=True)
 
 
-def packing_fig(cols, rows_, unit):
-    """박스 윗면 한 층의 적재 배치를 Plotly 히트맵 격자로 그림 (호버 인터랙션)."""
-    cap = 40
-    dc, dr = max(min(int(cols), cap), 1), max(min(int(rows_), cap), 1)
-    z = [[1] * dc for _ in range(dr)]
-    fig = go.Figure(go.Heatmap(
-        z=z, x=list(range(1, dc + 1)), y=list(range(1, dr + 1)),
-        xgap=3, ygap=3, showscale=False,
-        colorscale=[[0, "#3987e5"], [1, "#3987e5"]],
-        hovertemplate=f"열 %{{x}} · 행 %{{y}}<br>{unit} 위치<extra></extra>",
-    ))
+_CUBE_FACES = [(0, 1, 2), (0, 2, 3), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4),
+               (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
+_CUBE_VERTS = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0),
+               (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+
+
+def _cuboids_mesh(cells, color, opacity):
+    """여러 개의 3D 직육면체(제품 블록)를 하나의 Mesh3d로 묶어 반환 (성능)."""
+    s = 0.86
+    X, Y, Z, I, J, K = [], [], [], [], [], []
+    for ox, oy, oz in cells:
+        base = len(X)
+        for vx, vy, vz in _CUBE_VERTS:
+            X.append(ox + vx * s); Y.append(oy + vy * s); Z.append(oz + vz * s)
+        for a, b, c in _CUBE_FACES:
+            I.append(base + a); J.append(base + b); K.append(base + c)
+    return go.Mesh3d(x=X, y=Y, z=Z, i=I, j=J, k=K, color=color, opacity=opacity,
+                     flatshading=True, hoverinfo="skip", lighting=dict(ambient=.55,
+                     diffuse=.8, specular=.2))
+
+
+def _box_edges(nx, ny, nz):
+    """박스(Carton) 투명 가이드라인 테두리 (12모서리)."""
+    p = [(0, 0, 0), (nx, 0, 0), (nx, ny, 0), (0, ny, 0),
+         (0, 0, nz), (nx, 0, nz), (nx, ny, nz), (0, ny, nz)]
+    edges = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4),
+             (0, 4), (1, 5), (2, 6), (3, 7)]
+    X, Y, Z = [], [], []
+    for a, b in edges:
+        X += [p[a][0], p[b][0], None]
+        Y += [p[a][1], p[b][1], None]
+        Z += [p[a][2], p[b][2], None]
+    return go.Scatter3d(x=X, y=Y, z=Z, mode="lines",
+                        line=dict(color="#5b6b7d", width=4), hoverinfo="skip")
+
+
+def packing_fig_3d(nx, ny, nz, highlight=None):
+    """제품 블록이 박스 안에 3D로 적층된 모습 (드래그 회전/확대). highlight=강조할 층(1~)."""
+    cap = 8
+    dx = max(min(int(nx), cap), 1)
+    dy = max(min(int(ny), cap), 1)
+    dz = max(min(int(nz), cap), 1)
+    dim, hi = [], []
+    for k in range(dz):
+        for j in range(dy):
+            for i in range(dx):
+                (hi if (highlight and k + 1 == highlight) else dim).append((i, j, k))
+    data = [_box_edges(dx, dy, dz)]
+    if dim:
+        data.append(_cuboids_mesh(dim, "#3987e5", 0.42 if highlight else 0.9))
+    if hi:
+        data.append(_cuboids_mesh(hi, "#40d6a0", 0.97))
+    fig = go.Figure(data)
     fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=6, r=6, t=6, b=6), height=380,
-        xaxis=dict(visible=False, constrain="domain"),
-        yaxis=dict(visible=False, scaleanchor="x", scaleratio=1, autorange="reversed"),
-        hoverlabel=dict(bgcolor="#1c2432", bordercolor="#3987e5",
-                        font=dict(color="#e6edf3", size=12)),
+        paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0),
+        height=460, showlegend=False,
+        scene=dict(
+            xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
+            bgcolor="rgba(0,0,0,0)", aspectmode="data",
+            camera=dict(eye=dict(x=1.6, y=1.5, z=1.15)),
+        ),
     )
     return fig
 
@@ -285,6 +328,23 @@ with st.sidebar:
             _per_layer = bag_layer_capacity(product, _chosen) or 1
             st.caption(f"✅ 추천 입수: **한 봉지 {_per_layer}개** "
                        f"(봉투 {_chosen['size']}에 한 겹 가득)")
+
+            # 봉투별 입수 가이드라인 (이 제품 기준, 한 겹)
+            _caps = [(bg["박스명"], bg["size"], bag_layer_capacity(product, bg))
+                     for bg in _bags]
+            _pos = [c for _, _, c in _caps if c > 0]
+            if _pos:
+                st.caption(f"📋 봉투별 입수 가이드: **{min(_pos):,} ~ {max(_pos):,}개** "
+                           f"(제품 {pl:g}×{pw:g}×{ph:g} 기준 · 한 겹)")
+                if st.checkbox("봉투별 입수 상세 보기", value=False):
+                    st.dataframe(
+                        pd.DataFrame([{"지퍼백": n, "규격": s,
+                                       "입수(개)": c if c > 0 else "안 들어감"}
+                                      for n, s, c in _caps]),
+                        hide_index=True, use_container_width=True)
+            else:
+                st.warning("이 제품이 들어가는 지퍼백이 없습니다. 규격을 확인하세요.")
+
             _override = st.checkbox("입수 직접 지정", value=False,
                                     help="추천값 대신 원하는 입수를 직접 넣습니다.")
             bag_count = st.number_input(
@@ -395,12 +455,20 @@ if view == VIEWS[0]:
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
             if _c > 0 and _r > 0:
-                st.plotly_chart(packing_fig(_c, _r, _u), use_container_width=True,
+                _shown_layers = min(_lay, 8)
+                hl = None
+                if _shown_layers > 1:
+                    hl = st.slider("적층 확인 (층)", 1, _shown_layers, 1,
+                                   help="선택한 층이 에메랄드색으로 강조됩니다. "
+                                        "차트를 드래그하면 회전, 스크롤하면 확대됩니다.")
+                st.plotly_chart(packing_fig_3d(_c, _r, _lay, highlight=hl),
+                                use_container_width=True,
                                 config={"displayModeBar": False})
-                cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개까지 가능하나 "
+                trunc = _c > 8 or _r > 8 or _lay > 8
+                cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개 가능하나 "
                             f"'{best_row['제한 요인']}'으로 {_total:,}개만 적재") if _capped else ""
-                st.caption(f"윗면 {_c}×{_r} 격자 · 마우스를 올리면 위치 표시"
-                           + ("  (40×40까지만 표시)" if _c > 40 or _r > 40 else "")
+                st.caption(f"🧊 {_c}×{_r}×{_lay} 적층 · 드래그로 회전 / 스크롤로 확대"
+                           + ("  (그림은 8×8×8까지 대표 표시)" if trunc else "")
                            + cap_note)
             else:
                 st.info("이 조합은 적재되지 않습니다.")
