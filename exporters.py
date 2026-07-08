@@ -174,19 +174,23 @@ def to_pdf_bytes(header_info, rows):
     return buf.getvalue()
 
 
-def default_header_info(entity_name, entity, outer_group, product,
-                        part_name="", unit_weight_g=0.0, inner_mode="", bag_name=""):
-    """견적서 상단 메타 정보 표준 생성."""
+def default_header_info(customer, outer_group, product,
+                        part_name="", unit_weight_g=0.0, inner_mode="", bag_name="",
+                        sel_box="", sel_size="", sel_qty=0, tray_info=""):
+    """견적서 상단 메타 정보 표준 생성 (고객사·선택 박스 포함)."""
     inner_label = inner_mode + (f" ({bag_name})" if (bag_name and "지퍼백" in inner_mode) else "")
     info = {
+        "고객사": customer if customer else "-",
         "품명": part_name if part_name else "-",
-        "대상 법인": f'{entity_name} ({entity["code"]})',
         "포장재": inner_label if inner_mode else "-",
         "박스 종류": outer_group,
+        "선택 박스": f"{sel_box} ({sel_size})" if sel_box else "-",
+        "박스당 수량": f"{sel_qty:,} 개" if sel_qty else "-",
         "제품 사이즈(L×W×H mm)": f"{product[0]}×{product[1]}×{product[2]}",
         "제품 1개 무게(g)": f"{unit_weight_g:g}" if unit_weight_g else "-",
-        "견적 통화": entity["quote_currency"],
         "작성일": str(date.today()),
         "작성 부서": "개발팀 (R&D / Packaging)",
     }
+    if tray_info:
+        info["트레이 제작정보"] = tray_info
     return info

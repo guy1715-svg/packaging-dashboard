@@ -11,12 +11,11 @@
     메인     → 적재 효율 계산 결과 + 구매팀 전달용 표준 양식 + 다운로드
 """
 
-import copy
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-from data import (DEFAULT_ENTITY, BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
+from data import (BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
                   BAG_GROUP, TRAY_GROUP)
 from calculations import (build_packaging_rows, tray_cell_count,
                           fit_zipper_bag, bag_layer_capacity)
@@ -420,14 +419,9 @@ with st.sidebar:
         wall_margin = st.number_input(
             "박스 벽두께 여유 (mm)", min_value=0.0, value=0.0, step=1.0,
             help="박스 규격이 외경일 때, 벽두께만큼 빼고 계산합니다. (0=규격 그대로)")
-
-    st.markdown("")
-    entity = copy.deepcopy(DEFAULT_ENTITY)
-    with st.expander("💰 포장 인건비 (선택)"):
-        entity["packing_labor_per_box"] = st.number_input(
-            "박스당 포장 인건비 (KRW)", min_value=0.0,
-            value=float(DEFAULT_ENTITY["packing_labor_per_box"]), step=100.0,
-            help="박스당 총원가 = 박스 단가 + 포장 인건비")
+        safety_pct = st.number_input(
+            "적재 여유율 (%)", min_value=0.0, max_value=90.0, value=0.0, step=5.0,
+            help="이론 적재량은 실제보다 많을 수 있어요. 예: 10 → 이론 수량의 90%로 반영")
 
 # ---------------------------------------------------------------------------
 # 메인 - 계산 (제품 → 포장재 → 박스)
@@ -451,14 +445,26 @@ if is_tray and tray_l > 0 and tray_w > 0:
             gap=tray_gap, pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
 
 rows = build_packaging_rows(
-    product, outer_boxes, entity, inner_mode=inner_mode, outer_group=outer_group,
+    product, outer_boxes, inner_mode=inner_mode, outer_group=outer_group,
     unit_weight_g=unit_weight_g, part_name=part_name, wall_margin=wall_margin,
     use_best=use_best, tray_cells=tray_cells, tray_grid=tray_grid,
     tray_l=tray_l, tray_w=tray_w, tray_thickness=tray_thickness,
     bag_name=bag_name, bag_count=bag_count, bag_l=bag_l, bag_w=bag_w, bag_h=bag_h,
-    weight_limit_kg=weight_limit_kg)
+    weight_limit_kg=weight_limit_kg, safety_pct=safety_pct)
 
 best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
+
+# 사용할 박스 선택(탭 간 공유) — session_state 로 유지
+_rowmap = {r["박스명"]: r for r in rows}
+if st.session_state.get("sel_box") not in _rowmap:
+    st.session_state.pop("sel_box", None)
+sel_row = _rowmap.get(st.session_state.get("sel_box"), best_row) if rows else None
+# 트레이 제작정보(견적서용)
+tray_info = ""
+if is_tray and tray_custom:
+    _parts = [x for x in [tray_material, f"두께 {tray_thickness:g}mm" if tray_thickness else "",
+                          tray_maker, tray_color] if x]
+    tray_info = " · ".join(_parts)
 
 # 컨텍스트 칩 바
 _wchip = f'<span class="chip"><b>무게</b> {unit_weight_g:g} g</span>' if unit_weight_g else ""
@@ -511,14 +517,17 @@ if view == VIEWS[0]:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
         st.markdown("")
 
-        # 사용할 박스 선택 (추천 자동선택 · 변경 가능)
-        _sorted = sorted(rows, key=lambda r: r["박스당 총 제품"], reverse=True)
-        _opts = [f'{r["박스명"]}  ·  {r["박스당 총 제품"]:,}개  ·  {r["규격(Size)"]}'
-                 + ("  🏆추천" if r is best_row else "") for r in _sorted]
-        _pick = st.selectbox("📦 사용할 박스 선택 (추천 자동선택 · 변경 가능)", _opts, index=0,
-                             help="추천 박스가 기본 선택됩니다. 실제 쓸 박스를 직접 고르면 "
-                                  "아래 배치도·수치·기록이 그 박스 기준으로 바뀝니다.")
-        sel_row = _sorted[_opts.index(_pick)]
+        # 사용할 박스 선택 (추천 자동선택 · 변경 가능 · 견적/기록 탭과 공유)
+        _names = [r["박스명"] for r in
+                  sorted(rows, key=lambda r: r["박스당 총 제품"], reverse=True)]
+        st.selectbox(
+            "📦 사용할 박스 선택 (추천 자동선택 · 변경 가능)", _names, key="sel_box",
+            format_func=lambda n: f'{n}  ·  {_rowmap[n]["박스당 총 제품"]:,}개  ·  '
+                                  f'{_rowmap[n]["규격(Size)"]}'
+                                  + ("  🏆추천" if n == best_row["박스명"] else ""),
+            help="추천 박스가 기본 선택됩니다. 실제 쓸 박스를 고르면 배치도·수치·견적·기록이 "
+                 "그 박스 기준으로 바뀝니다.")
+        sel_row = _rowmap.get(st.session_state.get("sel_box"), best_row)
         if sel_row is not best_row:
             st.caption(f"ℹ️ 추천은 **{best_row['박스명']}**({best_row['박스당 총 제품']:,}개)"
                        f"이지만 **{sel_row['박스명']}**({sel_row['박스당 총 제품']:,}개)를 "
@@ -655,20 +664,30 @@ if view == VIEWS[0]:
 # --- 탭2: 견적 양식 + 다운로드 ---
 elif view == VIEWS[1]:
     section("구매팀 전달용 표준 견적 요청서")
-    header_info = default_header_info("성우", entity, outer_group, product,
-                                      part_name=part_name, unit_weight_g=unit_weight_g,
-                                      inner_mode=inner_mode, bag_name=bag_name)
+    _sb = sel_row["박스명"] if sel_row else ""
+    _ss = sel_row["규격(Size)"] if sel_row else ""
+    _sq = sel_row["박스당 총 제품"] if sel_row else 0
+    header_info = default_header_info(
+        customer, outer_group, product, part_name=part_name,
+        unit_weight_g=unit_weight_g, inner_mode=inner_mode, bag_name=bag_name,
+        sel_box=_sb, sel_size=_ss, sel_qty=_sq, tray_info=tray_info)
 
     # 메타 정보를 칩으로
     chips = "".join(f'<span class="chip"><b>{k}</b> {v}</span>'
                     for k, v in header_info.items())
     st.markdown(f'<div class="ctxbar">{chips}</div>', unsafe_allow_html=True)
 
+    if sel_row:
+        st.success(f"📦 선택 박스 **{_sb}** ({_ss}) · 박스당 **{_sq:,}개** 기준으로 견적을 만듭니다.")
+    scope = st.radio("견적 범위", ["선택 박스만", "전체 박스 비교"], horizontal=True,
+                     help="기본은 선택한 박스 1종. 여러 박스 단가를 한 번에 받으려면 '전체'.")
+    quote_source = [sel_row] if (scope == "선택 박스만" and sel_row) else rows
+
     st.markdown("##### 견적 항목  ·  구매팀이 **‘구매 확정 단가’** 열에 입력해 회신")
-    if not rows:
+    if not quote_source:
         st.warning("표시할 항목이 없습니다.")
     else:
-        editable = pd.DataFrame(rows).drop(
+        editable = pd.DataFrame(quote_source).drop(
             columns=["_cols", "_rows", "_layers", "_unit"], errors="ignore")
         edited = st.data_editor(
             editable,
