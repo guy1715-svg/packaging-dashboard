@@ -57,6 +57,9 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 [data-baseweb="input"]:focus-within{border-color:var(--accent) !important;
   box-shadow:0 0 0 3px rgba(57,135,229,.18) !important;}
 .stNumberInput input,.stTextInput input{font-variant-numeric:tabular-nums;}
+/* 숫자 입력창 +/- 스텝퍼 제거 (깔끔하게) */
+[data-testid="stNumberInput"] button{display:none !important;}
+[data-testid="stNumberInput"] input{text-align:left;padding-right:10px;}
 [data-testid="stExpander"]{border:1px solid var(--border);border-radius:10px;
   background:var(--surface);}
 
@@ -113,7 +116,7 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 
 /* ---------- 배치도 (Plotly 컨테이너 + 수치 카드) ---------- */
 [data-testid="stPlotlyChart"]{border:1px solid var(--border);border-radius:16px;
-  overflow:hidden;background:linear-gradient(160deg,#161b22,#12161d);padding:6px;
+  overflow:hidden;background:linear-gradient(160deg,#161b22,#12161d);padding:2px;
   box-shadow:0 12px 32px -18px rgba(0,0,0,.75);}
 .stat{background:linear-gradient(160deg,#1a2029,#141922);border:1px solid #2a3140;
   border-radius:13px;padding:13px 16px;margin-bottom:12px;position:relative;overflow:hidden;
@@ -231,11 +234,12 @@ def packing_fig_3d(nx, ny, nz, highlight=None):
     fig = go.Figure(data)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0),
-        height=460, showlegend=False,
+        height=420, showlegend=False,
         scene=dict(
             xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
             bgcolor="rgba(0,0,0,0)", aspectmode="data",
-            camera=dict(eye=dict(x=1.6, y=1.5, z=1.15)),
+            domain=dict(x=[0, 1], y=[0, 1]),
+            camera=dict(eye=dict(x=1.35, y=1.25, z=0.98)),
         ),
     )
     return fig
@@ -262,11 +266,12 @@ def sidebar_step(n, title):
 
 
 with st.sidebar:
-    sidebar_step(1, "기본 입력")
+    sidebar_step(1, "제품 입력")
 
-    customer = st.text_input("고객사", value="", placeholder="예: 현대모비스")
-    part_name = st.text_input("품명 (제품명/품번)", value="",
-                              placeholder="예: SW-CONN-0250")
+    with st.expander("🏷️ 기본 정보 (고객사·품명) · 선택"):
+        customer = st.text_input("고객사", value="", placeholder="예: 현대모비스")
+        part_name = st.text_input("품명 (제품명/품번)", value="",
+                                  placeholder="예: SW-CONN-0250")
 
     st.markdown("**제품 외경 (mm)**")
     c1, c2, c3 = st.columns(3)
@@ -294,25 +299,38 @@ with st.sidebar:
     is_tray = "트레이" in inner_mode
     is_bag = "지퍼백" in inner_mode
 
-    # --- 트레이 설정 (범용트레이 선택 시) ---
+    # --- 트레이 설정 (범용/제품 전용) ---
     tray_gap = tray_pitch_x = tray_pitch_y = 0.0
     tray_l = tray_w = tray_thickness = 0.0
+    tray_custom = False
+    tray_cells_manual = 0
     if is_tray:
         with st.expander("🔧 트레이 설정", expanded=True):
+            tray_kind = st.radio(
+                "트레이 종류", ["범용 (칸수 자동 계산)", "제품 전용 (칸수 직접 입력)"],
+                help="제품 전용 트레이는 도면상 적재수량(칸수)이 정해져 있으므로 직접 입력합니다.")
+            tray_custom = tray_kind.startswith("제품 전용")
+
             t1, t2 = st.columns(2)
-            tray_l = t1.number_input("트레이 가로", min_value=0.0, value=315.0, step=5.0)
-            tray_w = t2.number_input("트레이 세로", min_value=0.0, value=410.0, step=5.0)
+            tray_l = t1.number_input("트레이 가로 (mm)", min_value=0.0, value=315.0, step=5.0)
+            tray_w = t2.number_input("트레이 세로 (mm)", min_value=0.0, value=410.0, step=5.0)
             tray_thickness = st.number_input(
                 "트레이 두께/높이 (mm)", min_value=0.0, value=15.0, step=1.0,
                 help="트레이 1장 높이 → 박스에 몇 단 쌓이는지 계산에 사용")
-            p1, p2 = st.columns(2)
-            tray_pitch_x = p1.number_input("제품 피치 X", min_value=0.0, value=0.0,
-                                           step=0.5, help="칸 중심간 거리(도면값). 0=자동")
-            tray_pitch_y = p2.number_input("제품 피치 Y", min_value=0.0, value=0.0,
-                                           step=0.5, help="0=자동(제품크기+여유로 계산)")
-            tray_gap = st.number_input(
-                "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
-                help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
+
+            if tray_custom:
+                tray_cells_manual = st.number_input(
+                    "트레이 1장당 적재수량 (칸)", min_value=1, value=50, step=1,
+                    help="제품 전용 트레이 도면의 칸 수를 직접 입력하세요.")
+            else:
+                p1, p2 = st.columns(2)
+                tray_pitch_x = p1.number_input("제품 피치 X", min_value=0.0, value=0.0,
+                                               step=0.5, help="칸 중심간 거리(도면값). 0=자동")
+                tray_pitch_y = p2.number_input("제품 피치 Y", min_value=0.0, value=0.0,
+                                               step=0.5, help="0=자동(제품크기+여유로 계산)")
+                tray_gap = st.number_input(
+                    "칸 사이 여유 간격 (mm)", min_value=0.0, value=0.0, step=0.5,
+                    help="피치를 비웠을 때만 사용. 제품 사이에 두는 간격.")
 
     # --- 지퍼백 설정 (지퍼백 선택 시) : 규격·입수 모두 자동 추천 ---
     bag_count = 1
@@ -379,12 +397,21 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 outer_boxes = BOX_CATALOG[outer_group]
 
-# 트레이 칸수 (범용트레이 선택 시)
+# 트레이 칸수 (범용=자동 계산 / 제품 전용=직접 입력)
 tray_cells, tray_grid = 0, (0, 0)
 if is_tray and tray_l > 0 and tray_w > 0:
-    tray_cells, tray_grid = tray_cell_count(
-        product, {"inner_l": tray_l, "inner_w": tray_w},
-        gap=tray_gap, pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
+    if tray_custom:
+        tray_cells = int(tray_cells_manual)
+        # 직접 입력 칸수를 배치도용 격자로 분해 (정사각에 가까운 약수쌍 = 정확히 일치)
+        _gc = 1
+        for _a in range(1, int(tray_cells ** 0.5) + 1):
+            if tray_cells % _a == 0:
+                _gc = _a
+        tray_grid = (_gc, tray_cells // _gc)
+    else:
+        tray_cells, tray_grid = tray_cell_count(
+            product, {"inner_l": tray_l, "inner_w": tray_w},
+            gap=tray_gap, pitch_x=tray_pitch_x, pitch_y=tray_pitch_y)
 
 rows = build_packaging_rows(
     product, outer_boxes, entity, inner_mode=inner_mode, outer_group=outer_group,
@@ -489,17 +516,17 @@ if view == VIEWS[0]:
         _mx = df["박스당 총 제품"].max()
         df.insert(0, "추천", df["박스당 총 제품"].apply(
             lambda v: "🏆" if v == _mx and v > 0 else ""))
-        section(f"{outer_group} · 박스별 총 제품 수")
         show_cols = ["추천", "박스명", "규격(Size)", "포장재", "적재 방식",
                      "박스당 총 제품", "제한 요인", "비고"]
         if unit_weight_g:
             show_cols.insert(6, "박스 총중량(kg)")
-        st.dataframe(
-            df[show_cols], use_container_width=True, hide_index=True,
-            column_config={
-                "박스당 총 제품": st.column_config.NumberColumn(format="%d 개"),
-            },
-        )
+        with st.expander(f"📦 다른 박스 규격 및 적재량 비교하기  ({len(rows)}종) ▾"):
+            st.dataframe(
+                df[show_cols], use_container_width=True, hide_index=True,
+                column_config={
+                    "박스당 총 제품": st.column_config.NumberColumn(format="%d 개"),
+                },
+            )
 
         # 기록 저장
         st.markdown("")
