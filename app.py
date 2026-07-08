@@ -126,7 +126,8 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
   font-variant-numeric:tabular-nums;line-height:1.05;}
 .stat .u{font-size:.8rem;color:var(--muted);font-weight:600;margin-left:4px;}
 .stat.hi{background:linear-gradient(160deg,rgba(25,158,112,.22),#141c1c 62%);
-  border-color:rgba(64,214,160,.45);}
+  border:1px solid rgba(64,214,160,.55);
+  box-shadow:0 0 0 1px rgba(64,214,160,.25),0 0 24px -6px rgba(64,214,160,.5);}
 .stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
 .stat.hi .v{color:#48e0aa;font-size:1.95rem;text-shadow:0 0 20px rgba(64,214,160,.3);}
 
@@ -261,13 +262,17 @@ def packing_fig_3d(nx, ny, nz, active_layers=None,
         data.append(_cuboids_mesh(solid, "#3987e5", 0.9))
     if top:
         data.append(_cuboids_mesh(top, "#40d6a0", 0.97))
+    # 실제 박스 비율(L:W:H)로 스케일 → 직사각형/정사각형 박스가 눈으로 구분됨
+    _m = max(box_l, box_w, box_h) or 1
+    aspect = dict(x=(box_l / _m) or 1, y=(box_w / _m) or 1, z=(box_h / _m) or 1) \
+        if (box_l and box_w and box_h) else dict(x=1, y=1, z=1)
     fig = go.Figure(data)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0),
         height=430, showlegend=False,
         scene=dict(
             xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
-            bgcolor="rgba(0,0,0,0)", aspectmode="data",
+            bgcolor="rgba(0,0,0,0)", aspectmode="manual", aspectratio=aspect,
             domain=dict(x=[0, 1], y=[0, 1]),
             camera=dict(eye=dict(x=1.55, y=1.45, z=1.08)),
         ),
@@ -555,14 +560,15 @@ if view == VIEWS[0]:
             f'<b style="color:#6ff0c0;">높이 {_bh:g}</b>'
             ' <span style="color:#8b98a5;">mm</span></div>',
             unsafe_allow_html=True)
+        # 층 슬라이더는 컬럼 위에 → 3D 차트 상단과 우측 첫 카드 상단이 정렬됨
+        sel = _lay
+        if _c > 0 and _r > 0 and _lay > 1:
+            sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _lay, _lay,
+                            help="선택한 층까지 채워서 표시 · 맨 위 층 초록 강조 · "
+                                 "드래그 회전 / 스크롤 확대")
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
             if _c > 0 and _r > 0:
-                sel = _lay
-                if _lay > 1:
-                    sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _lay, _lay,
-                                    help="선택한 층까지 채워서 보여줍니다. "
-                                         "맨 위 층은 초록으로 강조 · 드래그 회전/스크롤 확대")
                 st.plotly_chart(
                     packing_fig_3d(_c, _r, _lay, active_layers=sel,
                                    box_l=_bl, box_w=_bw, box_h=_bh),
