@@ -215,31 +215,57 @@ def _box_edges(nx, ny, nz):
                         line=dict(color="#5b6b7d", width=4), hoverinfo="skip")
 
 
-def packing_fig_3d(nx, ny, nz, highlight=None):
-    """제품 블록이 박스 안에 3D로 적층된 모습 (드래그 회전/확대). highlight=강조할 층(1~)."""
+def _dim_labels(dx, dy, dz, box_l, box_w, box_h):
+    """박스 가로/세로/높이 치수 텍스트 (모서리 바깥)."""
+    xs, ys, zs, txt = [], [], [], []
+    if box_l:
+        xs.append(dx / 2); ys.append(-0.7); zs.append(0); txt.append(f"가로 {box_l:g}mm")
+    if box_w:
+        xs.append(-0.7); ys.append(dy / 2); zs.append(0); txt.append(f"세로 {box_w:g}mm")
+    if box_h:
+        xs.append(-0.7); ys.append(-0.7); zs.append(dz / 2); txt.append(f"높이 {box_h:g}mm")
+    return go.Scatter3d(x=xs, y=ys, z=zs, mode="text", text=txt,
+                        textfont=dict(color="#9fb4c9", size=13), hoverinfo="skip")
+
+
+def packing_fig_3d(nx, ny, nz, active_layers=None,
+                   box_l=0, box_w=0, box_h=0):
+    """
+    제품 블록이 박스 안에 3D로 적층된 모습 (드래그 회전/확대).
+    active_layers=N 이면 1~N층을 채워 표시(맨 위 층 강조), N+1층부터는 반투명 잔여 공간.
+    """
     cap = 8
     dx = max(min(int(nx), cap), 1)
     dy = max(min(int(ny), cap), 1)
     dz = max(min(int(nz), cap), 1)
-    dim, hi = [], []
+    N = active_layers if active_layers else dz
+    solid, top, ghost = [], [], []
     for k in range(dz):
         for j in range(dy):
             for i in range(dx):
-                (hi if (highlight and k + 1 == highlight) else dim).append((i, j, k))
-    data = [_box_edges(dx, dy, dz)]
-    if dim:
-        data.append(_cuboids_mesh(dim, "#3987e5", 0.42 if highlight else 0.9))
-    if hi:
-        data.append(_cuboids_mesh(hi, "#40d6a0", 0.97))
+                if k + 1 < N:
+                    solid.append((i, j, k))
+                elif k + 1 == N:
+                    top.append((i, j, k))
+                else:
+                    ghost.append((i, j, k))
+    data = [_box_edges(dx, dy, dz),
+            _dim_labels(dx, dy, dz, box_l, box_w, box_h)]
+    if ghost:
+        data.append(_cuboids_mesh(ghost, "#3987e5", 0.10))
+    if solid:
+        data.append(_cuboids_mesh(solid, "#3987e5", 0.9))
+    if top:
+        data.append(_cuboids_mesh(top, "#40d6a0", 0.97))
     fig = go.Figure(data)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0),
-        height=420, showlegend=False,
+        height=430, showlegend=False,
         scene=dict(
             xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
             bgcolor="rgba(0,0,0,0)", aspectmode="data",
             domain=dict(x=[0, 1], y=[0, 1]),
-            camera=dict(eye=dict(x=1.35, y=1.25, z=0.98)),
+            camera=dict(eye=dict(x=1.4, y=1.3, z=1.0)),
         ),
     )
     return fig
@@ -304,6 +330,7 @@ with st.sidebar:
     tray_l = tray_w = tray_thickness = 0.0
     tray_custom = False
     tray_cells_manual = 0
+    tray_material = tray_maker = tray_color = ""
     if is_tray:
         with st.expander("🔧 트레이 설정", expanded=True):
             tray_kind = st.radio(
@@ -322,6 +349,11 @@ with st.sidebar:
                 tray_cells_manual = st.number_input(
                     "트레이 1장당 적재수량 (칸)", min_value=1, value=50, step=1,
                     help="제품 전용 트레이 도면의 칸 수를 직접 입력하세요.")
+                st.markdown("**🆕 신규 트레이 제작 정보**")
+                tm1, tm2 = st.columns(2)
+                tray_material = tm1.text_input("재질", placeholder="예: PS 전도성")
+                tray_color = tm2.text_input("색상", placeholder="예: 블랙")
+                tray_maker = st.text_input("제작업체", placeholder="예: ○○트레이")
             else:
                 p1, p2 = st.columns(2)
                 tray_pitch_x = p1.number_input("제품 피치 X", min_value=0.0, value=0.0,
@@ -483,32 +515,45 @@ if view == VIEWS[0]:
         _geom = _per_layer * _lay                       # 부피 기준 최대
         _capped = _per_layer > 0 and _total < _geom     # 무게 한도 등으로 줄었는지
         _eff_layers = -(-_total // _per_layer) if _per_layer > 0 else 0
+        # 추천 박스 실제 치수(mm)
+        _pbox = next((b for b in outer_boxes if b["박스명"] == best_row["박스명"]), None)
+        _bl, _bw, _bh = (_pbox["inner_l"], _pbox["inner_w"], _pbox["inner_h"]) \
+            if _pbox else (0, 0, 0)
+        _layer_h = (_bh / _lay) if _lay else 0
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
             if _c > 0 and _r > 0:
-                _shown_layers = min(_lay, 8)
-                hl = None
-                if _shown_layers > 1:
-                    hl = st.slider("적층 확인 (층)", 1, _shown_layers, 1,
-                                   help="선택한 층이 에메랄드색으로 강조됩니다. "
-                                        "차트를 드래그하면 회전, 스크롤하면 확대됩니다.")
-                st.plotly_chart(packing_fig_3d(_c, _r, _lay, highlight=hl),
-                                use_container_width=True,
-                                config={"displayModeBar": False})
+                sel = _lay
+                if _lay > 1:
+                    sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _lay, _lay,
+                                    help="선택한 층까지 채워서 보여줍니다. "
+                                         "맨 위 층은 초록으로 강조 · 드래그 회전/스크롤 확대")
+                st.plotly_chart(
+                    packing_fig_3d(_c, _r, _lay, active_layers=sel,
+                                   box_l=_bl, box_w=_bw, box_h=_bh),
+                    use_container_width=True, config={"displayModeBar": False})
+                cum_qty = min(_per_layer * sel, _total)
+                cum_h = round(sel * _layer_h)
                 trunc = _c > 8 or _r > 8 or _lay > 8
                 cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개 가능하나 "
                             f"'{best_row['제한 요인']}'으로 {_total:,}개만 적재") if _capped else ""
-                st.caption(f"🧊 {_c}×{_r}×{_lay} 적층 · 드래그로 회전 / 스크롤로 확대"
-                           + ("  (그림은 8×8×8까지 대표 표시)" if trunc else "")
-                           + cap_note)
+                st.caption(f"🧊 {_c}×{_r}×{_lay} 적층"
+                           + ("  (그림은 8×8×8까지 대표)" if trunc else "") + cap_note)
+                st.markdown(
+                    '<div class="cta" style="margin-top:4px;padding:13px 18px;">'
+                    f'<div><div class="t">📐 1층 ~ {sel}층 누적</div>'
+                    f'<div class="d">예상 높이 <b style="color:#7ec8f3;">{cum_h:,} mm</b>'
+                    f' / 박스 {_bh:g}mm &nbsp;·&nbsp; 누적 수량 '
+                    f'<b style="color:#40d6a0;">{cum_qty:,} 개</b></div></div></div>',
+                    unsafe_allow_html=True)
             else:
                 st.info("이 조합은 적재되지 않습니다.")
         with stt:
             st.markdown(
                 stat_card("박스당 총 제품", f"{_total:,}", "개", hi=True)
                 + stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u)
-                + stat_card("실제 적층 단수", f"{_eff_layers:,}", "층")
-                + stat_card("적재 방식", best_row["적재 방식"], ""),
+                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층")
+                + stat_card("박스 규격(mm)", f"{_bl:g}×{_bw:g}×{_bh:g}", ""),
                 unsafe_allow_html=True)
         st.markdown("")
 
@@ -528,31 +573,40 @@ if view == VIEWS[0]:
                 },
             )
 
-        # 기록 저장
+        # 기록 저장 (추천 vs 실제 적용)
         st.markdown("")
-        section("이 사양 기록 저장")
+        section("이 사양 기록 저장  ·  추천 ↔ 실제 적용")
         _hist = store.load_df()
         _sim = store.similar_records(_hist, product)
         if _sim is not None and not _sim.empty:
             st.info(f"💡 비슷한 사이즈 과거 기록 **{len(_sim)}건**이 있어요. "
-                    "아래 '📚 기록 관리'에서 확인하세요.")
-        sc1, sc2 = st.columns([3, 1])
-        memo = sc1.text_input("비고(선택)", value="",
-                              placeholder="예: 릴 2단 적재, 완충재 포함",
-                              label_visibility="collapsed")
-        if sc2.button("💾 기록 저장", use_container_width=True):
+                    "'📚 기록 관리'에서 실제 적용 이력을 확인하세요.")
+        st.caption("대시보드 추천값이 기본으로 채워집니다. 현장에서 실제 적용한 값이 다르면 수정 후 저장하세요.")
+        rc1, rc2, rc3 = st.columns(3)
+        real_inner = rc1.text_input("실제 포장재", value=inner_mode)
+        real_box = rc2.text_input("실제 적용 박스", value=best_row["박스명"])
+        real_qty = rc3.number_input("실제 적용 수량", min_value=0,
+                                    value=int(best_row["박스당 총 제품"]), step=1)
+        memo = st.text_input("현실화 메모 / 비고", value="",
+                             placeholder="예: 추천은 55-2였으나 재고 문제로 T-10 적용")
+        if st.button("💾 기록 저장", type="primary", use_container_width=True):
             if not (customer or part_name):
                 st.warning("고객사 또는 품명을 입력한 뒤 저장하세요.")
             else:
+                match = "✅ 동일" if (real_box == best_row["박스명"]
+                                    and real_inner == inner_mode) else "⚠️ 변경"
                 store.append_record({
                     "저장일시": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "고객사": customer or "-", "제품명": part_name or "-",
                     "L": pl, "W": pw, "H": ph, "무게(g)": unit_weight_g,
-                    "포장재": inner_mode, "박스종류": outer_group,
-                    "추천박스": best_row["박스명"],
-                    "박스당 총제품": best_row["박스당 총 제품"], "비고": memo,
+                    "추천 포장재": inner_mode, "추천 박스": best_row["박스명"],
+                    "추천 수량": best_row["박스당 총 제품"],
+                    "실제 포장재": real_inner, "실제 박스": real_box,
+                    "실제 수량": real_qty, "일치": match,
+                    "트레이재질": tray_material, "트레이두께": tray_thickness if is_tray else "",
+                    "제작업체": tray_maker, "색상": tray_color, "비고": memo,
                 })
-                st.success("✅ 기록이 저장되었습니다. '📚 기록 관리'에서 확인하세요.")
+                st.success(f"✅ 기록 저장됨 ({match}). '📚 기록 관리'에서 확인하세요.")
 
         st.markdown("")
         st.markdown(
@@ -631,17 +685,33 @@ elif view == VIEWS[2]:
         st.info("아직 저장된 기록이 없습니다. '📊 적재 효율 계산'에서 "
                 "'💾 기록 저장'을 눌러 첫 기록을 남겨보세요.")
     else:
+        # 추천 vs 실제 적용 요약
+        if "일치" in hist.columns:
+            _same = (hist["일치"].astype(str).str.contains("동일")).sum()
+            _chg = len(hist) - _same
+            mm = st.columns(3)
+            mm[0].metric("총 기록", f"{len(hist)}건")
+            mm[1].metric("추천대로 적용", f"{_same}건")
+            mm[2].metric("변경 적용", f"{_chg}건")
+
         # 비슷한 사이즈 조회
         sim = store.similar_records(hist, product)
         section(f"🔍 현재 제품({pl:g}×{pw:g}×{ph:g})과 비슷한 사이즈")
         if sim is not None and not sim.empty:
-            st.caption(f"±15%(최소 5mm) 이내 재원 기록 {len(sim)}건")
+            st.caption(f"±15%(최소 5mm) 이내 재원 기록 {len(sim)}건 · 추천 ↔ 실제 적용 비교")
             st.dataframe(sim, use_container_width=True, hide_index=True)
         else:
             st.caption("비슷한 사이즈의 과거 기록이 없습니다.")
 
-        section("전체 기록")
-        kw = st.text_input("검색 (고객사·제품명·박스)", value="",
+        # 추천 ↔ 실제 비교 (핵심 열만)
+        section("추천 ↔ 실제 적용 비교")
+        cmp_cols = ["저장일시", "고객사", "제품명", "추천 포장재", "추천 박스",
+                    "추천 수량", "실제 포장재", "실제 박스", "실제 수량", "일치"]
+        cmp_cols = [c for c in cmp_cols if c in hist.columns]
+        st.dataframe(hist[cmp_cols][::-1], use_container_width=True, hide_index=True)
+
+        section("전체 기록 (제작정보 포함)")
+        kw = st.text_input("검색 (고객사·제품명·박스·업체)", value="",
                            placeholder="비워두면 전체 표시")
         shown = hist
         if kw:
