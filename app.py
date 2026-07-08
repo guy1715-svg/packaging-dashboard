@@ -20,6 +20,8 @@ from data import (DEFAULT_ENTITY, BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
                   BAG_GROUP, TRAY_GROUP)
 from calculations import (build_packaging_rows, tray_cell_count,
                           fit_zipper_bag, bag_layer_capacity)
+import store
+from datetime import datetime
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
 
 st.set_page_config(
@@ -262,6 +264,7 @@ def sidebar_step(n, title):
 with st.sidebar:
     sidebar_step(1, "기본 입력")
 
+    customer = st.text_input("고객사", value="", placeholder="예: 현대모비스")
     part_name = st.text_input("품명 (제품명/품번)", value="",
                               placeholder="예: SW-CONN-0250")
 
@@ -409,7 +412,8 @@ st.markdown(
 # ---------------------------------------------------------------------------
 # 탭 구성
 # ---------------------------------------------------------------------------
-VIEWS = ["📊 적재 효율 계산", "📄 구매팀 견적 양식", "🗄️ 기준 데이터(박스 리스트)"]
+VIEWS = ["📊 적재 효율 계산", "📄 구매팀 견적 양식",
+         "📚 기록 관리", "🗄️ 기준 데이터(박스 리스트)"]
 if "active_view" not in st.session_state:
     st.session_state.active_view = VIEWS[0]
 
@@ -497,6 +501,32 @@ if view == VIEWS[0]:
             },
         )
 
+        # 기록 저장
+        st.markdown("")
+        section("이 사양 기록 저장")
+        _hist = store.load_df()
+        _sim = store.similar_records(_hist, product)
+        if _sim is not None and not _sim.empty:
+            st.info(f"💡 비슷한 사이즈 과거 기록 **{len(_sim)}건**이 있어요. "
+                    "아래 '📚 기록 관리'에서 확인하세요.")
+        sc1, sc2 = st.columns([3, 1])
+        memo = sc1.text_input("비고(선택)", value="",
+                              placeholder="예: 릴 2단 적재, 완충재 포함",
+                              label_visibility="collapsed")
+        if sc2.button("💾 기록 저장", use_container_width=True):
+            if not (customer or part_name):
+                st.warning("고객사 또는 품명을 입력한 뒤 저장하세요.")
+            else:
+                store.append_record({
+                    "저장일시": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "고객사": customer or "-", "제품명": part_name or "-",
+                    "L": pl, "W": pw, "H": ph, "무게(g)": unit_weight_g,
+                    "포장재": inner_mode, "박스종류": outer_group,
+                    "추천박스": best_row["박스명"],
+                    "박스당 총제품": best_row["박스당 총 제품"], "비고": memo,
+                })
+                st.success("✅ 기록이 저장되었습니다. '📚 기록 관리'에서 확인하세요.")
+
         st.markdown("")
         st.markdown(
             '<div class="cta"><div>'
@@ -565,12 +595,64 @@ elif view == VIEWS[1]:
                 use_container_width=True,
             )
 
-# --- 탭3: 기준 데이터 열람 ---
+# --- 탭3: 기록 관리 ---
+elif view == VIEWS[2]:
+    section("📚 기록 관리")
+    hist = store.load_df()
+
+    if hist.empty:
+        st.info("아직 저장된 기록이 없습니다. '📊 적재 효율 계산'에서 "
+                "'💾 기록 저장'을 눌러 첫 기록을 남겨보세요.")
+    else:
+        # 비슷한 사이즈 조회
+        sim = store.similar_records(hist, product)
+        section(f"🔍 현재 제품({pl:g}×{pw:g}×{ph:g})과 비슷한 사이즈")
+        if sim is not None and not sim.empty:
+            st.caption(f"±15%(최소 5mm) 이내 재원 기록 {len(sim)}건")
+            st.dataframe(sim, use_container_width=True, hide_index=True)
+        else:
+            st.caption("비슷한 사이즈의 과거 기록이 없습니다.")
+
+        section("전체 기록")
+        kw = st.text_input("검색 (고객사·제품명·박스)", value="",
+                           placeholder="비워두면 전체 표시")
+        shown = hist
+        if kw:
+            m = hist.apply(lambda r: kw.lower() in
+                           " ".join(str(v) for v in r.values).lower(), axis=1)
+            shown = hist[m]
+        st.dataframe(shown[::-1], use_container_width=True, hide_index=True)
+        st.caption(f"총 {len(hist)}건 저장됨 · {len(shown)}건 표시")
+
+    st.markdown("")
+    section("보관 · 복원 (영구 저장)")
+    st.caption("⚠️ 클라우드는 재배포 시 기록이 초기화됩니다. 주기적으로 내려받아 보관하고, "
+               "필요 시 다시 올려 복원하세요.")
+    b1, b2 = st.columns(2)
+    b1.download_button("⬇️ 전체 기록 내려받기 (CSV)",
+                       data=hist.to_csv(index=False).encode("utf-8-sig"),
+                       file_name="포장기록.csv", mime="text/csv",
+                       use_container_width=True, disabled=hist.empty)
+    up = b2.file_uploader("⬆️ CSV 올려 복원/병합", type=["csv"],
+                          label_visibility="collapsed")
+    if up is not None:
+        try:
+            new = pd.read_csv(up)
+            merged = pd.concat([hist, new], ignore_index=True).drop_duplicates()
+            store.save_df(merged)
+            st.success(f"복원 완료 · 현재 {len(merged)}건")
+        except Exception as e:
+            st.error(f"CSV를 읽을 수 없습니다: {e}")
+    if not hist.empty and st.button("🗑️ 전체 기록 삭제", type="secondary"):
+        store.save_df(hist.iloc[0:0])
+        st.warning("모든 기록을 삭제했습니다.")
+
+# --- 탭4: 기준 데이터 열람 ---
 else:
     section("표준 포장재 카탈로그 (기준 데이터)")
     st.caption("실제 값 수정은 `data.py`의 리스트(CARTONS·DANPLA·PLASTIC·ZIPPERS·TRAYS)에서 관리합니다.")
-    view = st.selectbox("분류 선택", list(BOX_CATALOG.keys()))
-    st.dataframe(pd.DataFrame(BOX_CATALOG[view]), use_container_width=True, hide_index=True)
+    _grp = st.selectbox("분류 선택", list(BOX_CATALOG.keys()))
+    st.dataframe(pd.DataFrame(BOX_CATALOG[_grp]), use_container_width=True, hide_index=True)
 
 st.divider()
 st.caption("© 성우 개발팀 · 포장 사양 견적 대시보드")
