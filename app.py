@@ -216,16 +216,21 @@ def _box_edges(nx, ny, nz):
 
 
 def _dim_labels(dx, dy, dz, box_l, box_w, box_h):
-    """박스 가로/세로/높이 치수 텍스트 (모서리 바깥)."""
-    xs, ys, zs, txt = [], [], [], []
+    """박스 가로/세로/높이 치수 텍스트 (박스 바깥, 잘 보이게)."""
+    off = 1.6
+    xs, ys, zs, txt, col = [], [], [], [], []
     if box_l:
-        xs.append(dx / 2); ys.append(-0.7); zs.append(0); txt.append(f"가로 {box_l:g}mm")
+        xs.append(dx / 2); ys.append(-off); zs.append(0)
+        txt.append(f"↔ 가로 {box_l:g}mm"); col.append("#8fd0ff")
     if box_w:
-        xs.append(-0.7); ys.append(dy / 2); zs.append(0); txt.append(f"세로 {box_w:g}mm")
+        xs.append(-off); ys.append(dy / 2); zs.append(0)
+        txt.append(f"↔ 세로 {box_w:g}mm"); col.append("#8fd0ff")
     if box_h:
-        xs.append(-0.7); ys.append(-0.7); zs.append(dz / 2); txt.append(f"높이 {box_h:g}mm")
+        xs.append(-off); ys.append(-off); zs.append(dz / 2)
+        txt.append(f"↕ 높이 {box_h:g}mm"); col.append("#6ff0c0")
     return go.Scatter3d(x=xs, y=ys, z=zs, mode="text", text=txt,
-                        textfont=dict(color="#9fb4c9", size=13), hoverinfo="skip")
+                        textfont=dict(color=col, size=16, family="system-ui"),
+                        hoverinfo="skip")
 
 
 def packing_fig_3d(nx, ny, nz, active_layers=None,
@@ -265,7 +270,7 @@ def packing_fig_3d(nx, ny, nz, active_layers=None,
             xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
             bgcolor="rgba(0,0,0,0)", aspectmode="data",
             domain=dict(x=[0, 1], y=[0, 1]),
-            camera=dict(eye=dict(x=1.4, y=1.3, z=1.0)),
+            camera=dict(eye=dict(x=1.55, y=1.45, z=1.08)),
         ),
     )
     return fig
@@ -506,20 +511,41 @@ if view == VIEWS[0]:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
         st.markdown("")
 
-        # 적재 배치도 (좌: Plotly 시각화 / 우: 수치 카드)
-        section(f"적재 배치도 · {best_row['박스명']}")
-        _c, _r = int(best_row["_cols"]), int(best_row["_rows"])
-        _lay, _u = int(best_row["_layers"]), best_row["_unit"]
-        _total = best_row["박스당 총 제품"]
+        # 사용할 박스 선택 (추천 자동선택 · 변경 가능)
+        _sorted = sorted(rows, key=lambda r: r["박스당 총 제품"], reverse=True)
+        _opts = [f'{r["박스명"]}  ·  {r["박스당 총 제품"]:,}개  ·  {r["규격(Size)"]}'
+                 + ("  🏆추천" if r is best_row else "") for r in _sorted]
+        _pick = st.selectbox("📦 사용할 박스 선택 (추천 자동선택 · 변경 가능)", _opts, index=0,
+                             help="추천 박스가 기본 선택됩니다. 실제 쓸 박스를 직접 고르면 "
+                                  "아래 배치도·수치·기록이 그 박스 기준으로 바뀝니다.")
+        sel_row = _sorted[_opts.index(_pick)]
+        if sel_row is not best_row:
+            st.caption(f"ℹ️ 추천은 **{best_row['박스명']}**({best_row['박스당 총 제품']:,}개)"
+                       f"이지만 **{sel_row['박스명']}**({sel_row['박스당 총 제품']:,}개)를 "
+                       "선택했습니다.")
+
+        _c, _r = int(sel_row["_cols"]), int(sel_row["_rows"])
+        _lay, _u = int(sel_row["_layers"]), sel_row["_unit"]
+        _total = sel_row["박스당 총 제품"]
         _per_layer = _c * _r
         _geom = _per_layer * _lay                       # 부피 기준 최대
         _capped = _per_layer > 0 and _total < _geom     # 무게 한도 등으로 줄었는지
         _eff_layers = -(-_total // _per_layer) if _per_layer > 0 else 0
-        # 추천 박스 실제 치수(mm)
-        _pbox = next((b for b in outer_boxes if b["박스명"] == best_row["박스명"]), None)
+        # 선택 박스 실제 치수(mm)
+        _pbox = next((b for b in outer_boxes if b["박스명"] == sel_row["박스명"]), None)
         _bl, _bw, _bh = (_pbox["inner_l"], _pbox["inner_w"], _pbox["inner_h"]) \
             if _pbox else (0, 0, 0)
         _layer_h = (_bh / _lay) if _lay else 0
+
+        # 적재 배치도 (좌: Plotly 시각화 / 우: 수치 카드)
+        section(f"적재 배치도 · {sel_row['박스명']}")
+        st.markdown(
+            '<div style="margin:-2px 0 8px;font-size:1rem;">박스 규격 &nbsp;'
+            f'<b style="color:#8fd0ff;">가로 {_bl:g}</b> × '
+            f'<b style="color:#8fd0ff;">세로 {_bw:g}</b> × '
+            f'<b style="color:#6ff0c0;">높이 {_bh:g}</b>'
+            ' <span style="color:#8b98a5;">mm</span></div>',
+            unsafe_allow_html=True)
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
             if _c > 0 and _r > 0:
@@ -536,7 +562,7 @@ if view == VIEWS[0]:
                 cum_h = round(sel * _layer_h)
                 trunc = _c > 8 or _r > 8 or _lay > 8
                 cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개 가능하나 "
-                            f"'{best_row['제한 요인']}'으로 {_total:,}개만 적재") if _capped else ""
+                            f"'{sel_row['제한 요인']}'으로 {_total:,}개만 적재") if _capped else ""
                 st.caption(f"🧊 {_c}×{_r}×{_lay} 적층"
                            + ("  (그림은 8×8×8까지 대표)" if trunc else "") + cap_note)
                 st.markdown(
@@ -584,9 +610,9 @@ if view == VIEWS[0]:
         st.caption("대시보드 추천값이 기본으로 채워집니다. 현장에서 실제 적용한 값이 다르면 수정 후 저장하세요.")
         rc1, rc2, rc3 = st.columns(3)
         real_inner = rc1.text_input("실제 포장재", value=inner_mode)
-        real_box = rc2.text_input("실제 적용 박스", value=best_row["박스명"])
+        real_box = rc2.text_input("실제 적용 박스", value=sel_row["박스명"])
         real_qty = rc3.number_input("실제 적용 수량", min_value=0,
-                                    value=int(best_row["박스당 총 제품"]), step=1)
+                                    value=int(sel_row["박스당 총 제품"]), step=1)
         memo = st.text_input("현실화 메모 / 비고", value="",
                              placeholder="예: 추천은 55-2였으나 재고 문제로 T-10 적용")
         if st.button("💾 기록 저장", type="primary", use_container_width=True):
