@@ -114,6 +114,24 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .kpi-op{display:flex;align-items:center;font-size:1.6rem;color:#5b6b7d;font-weight:800;}
 @keyframes kpiIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 
+/* ---------- 치수 뱃지 ---------- */
+.badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:-2px 0 12px;}
+.badge{background:#1c2432;border:1px solid #2a3140;border-radius:9px;
+  padding:5px 12px;font-size:.84rem;color:#9fb0c0;letter-spacing:.01em;}
+.badge b{color:#eaf2fb;font-weight:700;font-variant-numeric:tabular-nums;}
+.badge.g{border-color:rgba(64,214,160,.35);}
+.badge.g b{color:#48e0aa;}
+.badge.unit{background:transparent;border:none;color:#6b7684;padding-left:2px;}
+
+/* ---------- 슬라이더 에메랄드 통일 ---------- */
+[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"]{
+  background-color:#34d399 !important;
+  box-shadow:0 0 0 4px rgba(52,211,153,.22) !important;}
+/* 채워진 트랙(파랑)을 hue-rotate로 에메랄드화 (채움 위치 유지) */
+[data-testid="stSlider"] [data-baseweb="slider"] > div:nth-child(1) > div:nth-child(1) > div:nth-child(2){
+  filter:hue-rotate(-58deg) saturate(1.15) !important;}
+[data-testid="stSlider"] [data-testid="stThumbValue"]{color:#48e0aa !important;font-weight:700;}
+
 /* ---------- 배치도 (Plotly 컨테이너 + 수치 카드) ---------- */
 [data-testid="stPlotlyChart"]{border:1px solid var(--border);border-radius:16px;
   overflow:hidden;background:linear-gradient(160deg,#161b22,#12161d);padding:2px;
@@ -197,8 +215,10 @@ def _cuboids_mesh(cells, color, opacity):
         for a, b, c in _CUBE_FACES:
             I.append(base + a); J.append(base + b); K.append(base + c)
     return go.Mesh3d(x=X, y=Y, z=Z, i=I, j=J, k=K, color=color, opacity=opacity,
-                     flatshading=True, hoverinfo="skip", lighting=dict(ambient=.55,
-                     diffuse=.8, specular=.2))
+                     flatshading=True, hoverinfo="skip",
+                     lighting=dict(ambient=.62, diffuse=.85, specular=.12,
+                                   roughness=.55, fresnel=.1),
+                     lightposition=dict(x=1200, y=800, z=2000))
 
 
 def _box_edges(nx, ny, nz):
@@ -258,11 +278,11 @@ def packing_fig_3d(nx, ny, nz, active_layers=None,
     data = [_box_edges(dx, dy, dz),
             _dim_labels(dx, dy, dz, box_l, box_w, box_h)]
     if ghost:
-        data.append(_cuboids_mesh(ghost, "#3987e5", 0.10))
+        data.append(_cuboids_mesh(ghost, "#3a5a86", 0.09))   # 잔여공간(옅은 코발트)
     if solid:
-        data.append(_cuboids_mesh(solid, "#3987e5", 0.9))
+        data.append(_cuboids_mesh(solid, "#4479c4", 0.84))   # 코발트 블루
     if top:
-        data.append(_cuboids_mesh(top, "#40d6a0", 0.97))
+        data.append(_cuboids_mesh(top, "#2fbf8f", 0.9))      # 에메랄드
     # 실제 박스 비율(L:W:H)로 스케일 → 직사각형/정사각형 박스가 눈으로 구분됨
     _m = max(box_l, box_w, box_h) or 1
     aspect = dict(x=(box_l / _m) or 1, y=(box_w / _m) or 1, z=(box_h / _m) or 1) \
@@ -565,12 +585,13 @@ if view == VIEWS[0]:
         # 적재 배치도 (좌: Plotly 시각화 / 우: 수치 카드)
         section(f"적재 배치도 · {sel_row['박스명']}")
         st.markdown(
-            '<div style="margin:-2px 0 8px;font-size:1rem;">박스 규격 &nbsp;'
-            f'<b style="color:#8fd0ff;">가로 {_bl:g}</b> × '
-            f'<b style="color:#8fd0ff;">세로 {_bw:g}</b> × '
-            f'<b style="color:#6ff0c0;">높이 {_bh:g}</b>'
-            ' <span style="color:#8b98a5;">mm</span></div>',
-            unsafe_allow_html=True)
+            '<div class="badges">'
+            f'<span class="badge">가로 <b>{_bl:g}</b></span>'
+            f'<span class="badge">세로 <b>{_bw:g}</b></span>'
+            f'<span class="badge g">높이 <b>{_bh:g}</b></span>'
+            '<span class="badge unit">mm</span>'
+            f'<span class="badge">📦 {sel_row["규격(Size)"]}</span>'
+            '</div>', unsafe_allow_html=True)
         # 층 슬라이더는 컬럼 위에 → 3D 차트 상단과 우측 첫 카드 상단이 정렬됨
         sel = _lay
         if _c > 0 and _r > 0 and _lay > 1:
