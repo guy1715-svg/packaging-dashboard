@@ -113,6 +113,38 @@ def bag_layer_capacity(product, bag):
     return max(f(a, b), f(b, a))
 
 
+def boxes_per_pallet(box_l, box_w, box_h, pallet, box_margin=0.0):
+    """
+    파렛트 1개에 박스가 몇 개 적재되는지.
+        바닥면 박스 = ⌊파렛트가로/박스가로⌋ × ⌊파렛트세로/박스세로⌋ (양방향 중 최대)
+        적층 단수   = ⌊(최대적재높이 − 파렛트높이) / 박스높이⌋
+    반환: (총 박스수, 바닥면 박스수, 적층 단수)
+    """
+    L, W = pallet["l"], pallet["w"]
+
+    def per(a, b):
+        if a <= 0 or b <= 0:
+            return 0
+        return int(L // a) * int(W // b)
+
+    base = max(per(box_l, box_w), per(box_w, box_l))
+    usable_h = max(pallet["max_stack"] - pallet["pallet_h"] - box_margin, 0)
+    layers = int(usable_h // box_h) if box_h > 0 else 0
+    return base * layers, base, layers
+
+
+def boxes_per_container(box_l, box_w, box_h, container):
+    """컨테이너에 박스를 직접 3D 적입(최적 방향). 반환: (박스수, (nL,nW,nH))."""
+    cbox = {"inner_l": container["l"], "inner_w": container["w"], "inner_h": container["h"]}
+    qty, grid, _ = loading_qty_best_orientation((box_l, box_w, box_h), cbox)
+    return qty, grid
+
+
+def cbm(l, w, h):
+    """부피(CBM, m³) = L×W×H(mm) / 1e9."""
+    return l * w * h / 1e9
+
+
 def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
                          unit_weight_g=0.0, part_name="", wall_margin=0.0,
                          use_best=True, tray_cells=0, tray_grid=(0, 0),

@@ -16,9 +16,10 @@ import streamlit as st
 import plotly.graph_objects as go
 
 from data import (BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
-                  BAG_GROUP, TRAY_GROUP)
+                  BAG_GROUP, TRAY_GROUP, PALLETS, CONTAINERS)
 from calculations import (build_packaging_rows, tray_cell_count,
-                          fit_zipper_bag, bag_layer_capacity)
+                          fit_zipper_bag, bag_layer_capacity,
+                          boxes_per_pallet, boxes_per_container, cbm)
 import store
 from datetime import datetime
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
@@ -608,6 +609,53 @@ if view == VIEWS[0]:
                 unsafe_allow_html=True)
         st.markdown("")
 
+        # 🚚 물류 적재 (파렛트 · 컨테이너)
+        if _total > 0 and _bl and _bw and _bh:
+            section("🚚 물류 적재 (파렛트 · 컨테이너)")
+            lc1, lc2, lc3 = st.columns(3)
+            _pal_name = lc1.selectbox("파렛트 규격", list(PALLETS.keys()))
+            _con_name = lc2.selectbox("컨테이너", list(CONTAINERS.keys()))
+            _pmargin = lc3.number_input("적재 높이 여유 (mm)", min_value=0.0, value=0.0,
+                                        step=10.0, help="파렛트 적재 시 상단 여유 높이")
+            _pal, _con = PALLETS[_pal_name], CONTAINERS[_con_name]
+            _bpp, _pbase, _players = boxes_per_pallet(_bl, _bw, _bh, _pal, box_margin=_pmargin)
+            _bpc, _cgrid = boxes_per_container(_bl, _bw, _bh, _con)
+            _boxcbm = cbm(_bl, _bw, _bh)
+            _fill = (_bpc * _boxcbm / cbm(_con["l"], _con["w"], _con["h"]) * 100) \
+                if _bpc else 0
+            kpi_row([
+                {"label": f"파렛트당 박스 · {_pal_name.split(' ')[0]}", "value": f"{_bpp:,}",
+                 "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단"},
+                {"label": "파렛트당 총 제품", "value": f"{_bpp * _total:,}", "unit": "개",
+                 "op": "→", "variant": "total"},
+            ])
+            kpi_row([
+                {"label": f"{_con_name} 당 박스", "value": f"{_bpc:,}", "unit": "박스",
+                 "sub": f"3D 배열 {_cgrid[0]}×{_cgrid[1]}×{_cgrid[2]} · 박스 {_boxcbm:.3f} CBM"},
+                {"label": f"{_con_name} 당 총 제품", "value": f"{_bpc * _total:,}", "unit": "개",
+                 "op": "→", "variant": "total"},
+                {"label": "컨테이너 적입률", "value": f"{_fill:.0f}", "unit": "%",
+                 "sub": "박스 부피 합 ÷ 컨테이너 부피"},
+            ])
+            st.caption("※ 파렛트/컨테이너 표준 규격 기준. 실제 규격은 `data.py`에서 조정 가능합니다.")
+            st.markdown("")
+
+        # 💰 원가 · 중량 (선택)
+        with st.expander("💰 원가 · 출하중량 계산 (선택)"):
+            oc1, oc2, oc3 = st.columns(3)
+            box_price = oc1.number_input("박스 단가 (원)", min_value=0.0, value=0.0, step=50.0)
+            pack_price = oc2.number_input("포장재 단가/박스 (원)", min_value=0.0, value=0.0, step=10.0)
+            box_self_g = oc3.number_input("박스 자체 무게 (g)", min_value=0.0, value=0.0, step=10.0)
+            _unit_cost = (box_price + pack_price) / _total if _total else 0
+            _ship_kg = (unit_weight_g * _total + box_self_g) / 1000 \
+                if (unit_weight_g or box_self_g) else 0
+            kpi_row([
+                {"label": "제품 1개당 포장원가", "value": f"{_unit_cost:,.1f}", "unit": "원",
+                 "sub": "(박스+포장재 단가) ÷ 박스당 제품"},
+                {"label": "박스 출하 총중량", "value": f"{_ship_kg:,.2f}", "unit": "kg",
+                 "sub": "제품 무게 합 + 박스 자체 무게"},
+            ])
+
         df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
         _mx = df["박스당 총 제품"].max()
         df.insert(0, "선택", df["박스명"].apply(
@@ -633,6 +681,23 @@ if view == VIEWS[0]:
                 if st.session_state.get("_last_tbl_row") != _r0:
                     st.session_state["_last_tbl_row"] = _r0
                     pick_box(df.iloc[_r0]["박스명"])
+
+            # 박스별 적재량 비교 차트
+            _bars = df[df["박스당 총 제품"] > 0]
+            if not _bars.empty:
+                _cfig = go.Figure(go.Bar(
+                    x=_bars["박스명"], y=_bars["박스당 총 제품"],
+                    marker_color=["#40d6a0" if n == sel_row["박스명"]
+                                  else "#3987e5" for n in _bars["박스명"]],
+                    hovertemplate="%{x}<br>%{y:,}개<extra></extra>"))
+                _cfig.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    height=260, margin=dict(l=0, r=0, t=8, b=0),
+                    yaxis=dict(title="박스당 총 제품", gridcolor="#2a3140",
+                               color="#8b98a5"),
+                    xaxis=dict(color="#8b98a5"))
+                st.plotly_chart(_cfig, use_container_width=True,
+                                config={"displayModeBar": False})
 
         # 기록 저장 (추천 vs 실제 적용)
         st.markdown("")
