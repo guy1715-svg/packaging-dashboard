@@ -21,6 +21,7 @@ from calculations import (build_packaging_rows, tray_cell_count,
                           fit_zipper_bag, bag_layer_capacity,
                           boxes_per_pallet, boxes_per_container, cbm)
 import store
+import mesh_loader
 from datetime import datetime
 from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
 
@@ -301,6 +302,33 @@ def packing_fig_3d(nx, ny, nz, active_layers=None,
     return fig
 
 
+def mesh_preview_fig(geom):
+    """업로드한 실제 제품 메쉬를 3D로 렌더 (형상 확인용)."""
+    verts, faces = geom["verts"], geom["faces"]
+    xs = [v[0] for v in verts]; ys = [v[1] for v in verts]; zs = [v[2] for v in verts]
+    i = [f[0] for f in faces]; j = [f[1] for f in faces]; k = [f[2] for f in faces]
+    L, W, H = geom["dims"]
+    fig = go.Figure(go.Mesh3d(
+        x=xs, y=ys, z=zs, i=i, j=j, k=k,
+        color="#4479c4", opacity=1.0, flatshading=True,
+        lighting=dict(ambient=0.55, diffuse=0.8, specular=0.2, roughness=0.6),
+        lightposition=dict(x=100, y=200, z=300), hoverinfo="skip"))
+    span = max(max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs), 1)
+    fig.update_layout(
+        height=340, margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        scene=dict(
+            xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
+            bgcolor="rgba(0,0,0,0)", aspectmode="manual",
+            aspectratio=dict(
+                x=(max(xs) - min(xs)) / span or 0.1,
+                y=(max(ys) - min(ys)) / span or 0.1,
+                z=(max(zs) - min(zs)) / span or 0.1),
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.1)),
+        ))
+    return fig
+
+
 def stat_card(label, value, unit="", hi=False):
     return (f'<div class="stat {"hi" if hi else ""}">'
             f'<div class="l">{label}</div>'
@@ -329,11 +357,48 @@ with st.sidebar:
         part_name = st.text_input("품명 (제품명/품번)", value="",
                                   placeholder="예: SW-CONN-0250")
 
+    # --- 3D 파일(STL/OBJ)에서 치수 자동 추출 ---
+    for _k, _dv in (("prod_l", 50.0), ("prod_w", 30.0), ("prod_h", 15.0)):
+        st.session_state.setdefault(_k, _dv)
+
+    with st.expander("📐 3D 파일로 치수 자동입력 (NX → STL)"):
+        if not mesh_loader.available():
+            st.caption("⚠️ 3D 라이브러리(trimesh) 미설치. requirements.txt 반영 후 재배포하세요.")
+        up3d = st.file_uploader("STL / OBJ / PLY 업로드",
+                                type=mesh_loader.SUPPORTED, key="mesh_up",
+                                help="NX: 파일 → 내보내기 → STL 로 저장 후 업로드하세요. "
+                                     "제품이 비스듬해도 가장 타이트한 L/W/H를 뽑습니다.")
+        if up3d is not None:
+            sig = (up3d.name, up3d.size)
+            if st.session_state.get("_mesh_sig") != sig:
+                data = up3d.getvalue()
+                res = mesh_loader.load_mesh(data, up3d.name)
+                if res is None:
+                    st.session_state["_mesh_geom"] = None
+                    st.error("3D 파일을 읽지 못했습니다. STL/OBJ/PLY 인지 확인하세요. "
+                             "(STEP/STP는 미지원 — NX에서 STL로 내보내세요)")
+                else:
+                    L, W, H = res["dims"]
+                    st.session_state["prod_l"] = float(L)
+                    st.session_state["prod_w"] = float(W)
+                    st.session_state["prod_h"] = float(H)
+                    st.session_state["_mesh_geom"] = res
+                    st.session_state["_mesh_name"] = up3d.name
+                st.session_state["_mesh_sig"] = sig
+                st.rerun()
+        _mg = st.session_state.get("_mesh_geom")
+        if _mg:
+            L, W, H = _mg["dims"]
+            st.success(f"📥 {st.session_state.get('_mesh_name','')} → "
+                       f"**{L}×{W}×{H} mm** 자동입력됨")
+            if _mg.get("note"):
+                st.caption("ℹ️ " + _mg["note"])
+
     st.markdown("**제품 외경 (mm)**")
     c1, c2, c3 = st.columns(3)
-    pl = c1.number_input("L", min_value=0.1, value=50.0, step=1.0)
-    pw = c2.number_input("W", min_value=0.1, value=30.0, step=1.0)
-    ph = c3.number_input("H", min_value=0.1, value=15.0, step=1.0)
+    pl = c1.number_input("L", min_value=0.1, step=1.0, key="prod_l")
+    pw = c2.number_input("W", min_value=0.1, step=1.0, key="prod_w")
+    ph = c3.number_input("H", min_value=0.1, step=1.0, key="prod_h")
     product = (pl, pw, ph)
 
     w1, w2 = st.columns(2)
@@ -592,6 +657,25 @@ if view == VIEWS[0]:
             '<span class="badge unit">mm</span>'
             f'<span class="badge">📦 {sel_row["규격(Size)"]}</span>'
             '</div>', unsafe_allow_html=True)
+        # 업로드한 실제 제품 3D 형상 미리보기 (있을 때만)
+        _mg = st.session_state.get("_mesh_geom")
+        if _mg and _mg.get("verts"):
+            with st.expander(f"🧩 업로드한 실제 제품 3D 보기 · "
+                             f"{st.session_state.get('_mesh_name','')}"):
+                mp, mc = st.columns([2, 1], gap="large")
+                with mp:
+                    st.plotly_chart(mesh_preview_fig(_mg),
+                                    use_container_width=True,
+                                    config={"displayModeBar": False})
+                _L, _W, _H = _mg["dims"]
+                _vol_cc = round(_mg["volume"] / 1000, 1) if _mg.get("volume") else 0
+                with mc:
+                    st.markdown(
+                        stat_card("측정 L×W×H", f"{_L}×{_W}×{_H}", "mm", hi=True)
+                        + stat_card("부피", f"{_vol_cc:g}" if _vol_cc else "-",
+                                    "cm³" if _vol_cc else ""),
+                        unsafe_allow_html=True)
+                    st.caption("최소 바운딩박스 기준 · 3D 파일에서 자동 측정")
         # 층 슬라이더는 컬럼 위에 → 3D 차트 상단과 우측 첫 카드 상단이 정렬됨
         sel = _lay
         if _c > 0 and _r > 0 and _lay > 1:
