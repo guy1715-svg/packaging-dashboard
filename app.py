@@ -459,11 +459,21 @@ rows = build_packaging_rows(
 
 best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
 
-# 사용할 박스 선택(탭 간 공유) — session_state 로 유지
+# 사용할 박스 선택(탭 간 공유) — session_state('sel_box')로 유지
+# (드롭다운/비교표 클릭 둘 다 이 값을 갱신 → 위젯 key 미사용, 수동 관리)
 _rowmap = {r["박스명"]: r for r in rows}
-if st.session_state.get("sel_box") not in _rowmap:
-    st.session_state.pop("sel_box", None)
-sel_row = _rowmap.get(st.session_state.get("sel_box"), best_row) if rows else None
+if rows and st.session_state.get("sel_box") not in _rowmap:
+    st.session_state["sel_box"] = best_row["박스명"]
+sel_row = _rowmap.get(st.session_state.get("sel_box")) if rows else None
+if rows and sel_row is None:
+    sel_row = best_row
+
+
+def pick_box(name):
+    """박스 선택 갱신 (드롭다운·표 공용)."""
+    if name and name != st.session_state.get("sel_box"):
+        st.session_state["sel_box"] = name
+        st.rerun()
 # 트레이 제작정보(견적서용)
 tray_info = ""
 if is_tray and tray_custom:
@@ -522,17 +532,17 @@ if view == VIEWS[0]:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
         st.markdown("")
 
-        # 사용할 박스 선택 (추천 자동선택 · 변경 가능 · 견적/기록 탭과 공유)
+        # 사용할 박스 선택 (드롭다운 · 견적/기록 탭과 공유)
         _names = [r["박스명"] for r in
                   sorted(rows, key=lambda r: r["박스당 총 제품"], reverse=True)]
-        st.selectbox(
-            "📦 사용할 박스 선택 (추천 자동선택 · 변경 가능)", _names, key="sel_box",
+        _picked = st.selectbox(
+            "📦 사용할 박스 선택 (추천 자동선택 · 변경 가능)", _names,
+            index=_names.index(sel_row["박스명"]),
             format_func=lambda n: f'{n}  ·  {_rowmap[n]["박스당 총 제품"]:,}개  ·  '
                                   f'{_rowmap[n]["규격(Size)"]}'
                                   + ("  🏆추천" if n == best_row["박스명"] else ""),
-            help="추천 박스가 기본 선택됩니다. 실제 쓸 박스를 고르면 배치도·수치·견적·기록이 "
-                 "그 박스 기준으로 바뀝니다.")
-        sel_row = _rowmap.get(st.session_state.get("sel_box"), best_row)
+            help="추천 박스가 기본 선택됩니다. 드롭다운 또는 아래 비교표에서 골라도 됩니다.")
+        pick_box(_picked)
         if sel_row is not best_row:
             st.caption(f"ℹ️ 추천은 **{best_row['박스명']}**({best_row['박스당 총 제품']:,}개)"
                        f"이지만 **{sel_row['박스명']}**({sel_row['박스당 총 제품']:,}개)를 "
@@ -600,19 +610,29 @@ if view == VIEWS[0]:
 
         df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
         _mx = df["박스당 총 제품"].max()
-        df.insert(0, "추천", df["박스당 총 제품"].apply(
+        df.insert(0, "선택", df["박스명"].apply(
+            lambda n: "✅" if n == sel_row["박스명"] else ""))
+        df.insert(1, "추천", df["박스당 총 제품"].apply(
             lambda v: "🏆" if v == _mx and v > 0 else ""))
-        show_cols = ["추천", "박스명", "규격(Size)", "포장재", "적재 방식",
+        show_cols = ["선택", "추천", "박스명", "규격(Size)", "포장재", "적재 방식",
                      "박스당 총 제품", "제한 요인", "비고"]
         if unit_weight_g:
-            show_cols.insert(6, "박스 총중량(kg)")
-        with st.expander(f"📦 다른 박스 규격 및 적재량 비교하기  ({len(rows)}종) ▾"):
-            st.dataframe(
+            show_cols.insert(7, "박스 총중량(kg)")
+        with st.expander(f"📦 다른 박스 규격 및 적재량 비교하기  ({len(rows)}종) · "
+                         "행을 클릭하면 그 박스로 선택됩니다 ▾", expanded=True):
+            _ev = st.dataframe(
                 df[show_cols], use_container_width=True, hide_index=True,
+                on_select="rerun", selection_mode="single-row", key="cmp_table",
                 column_config={
                     "박스당 총 제품": st.column_config.NumberColumn(format="%d 개"),
                 },
             )
+            if _ev.selection.rows:
+                _r0 = _ev.selection.rows[0]
+                # 표 클릭이 '새로 바뀐' 경우에만 적용 (드롭다운 선택과 충돌 방지)
+                if st.session_state.get("_last_tbl_row") != _r0:
+                    st.session_state["_last_tbl_row"] = _r0
+                    pick_box(df.iloc[_r0]["박스명"])
 
         # 기록 저장 (추천 vs 실제 적용)
         st.markdown("")
