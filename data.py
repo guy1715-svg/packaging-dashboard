@@ -67,6 +67,18 @@ CARTONS = [
     _box("Carton V-02", "423*323*285", 423, 323, 285, "5겹", "트레이박스 大"),
 ]
 
+# ---------------------------------------------------------------------------
+# 양산 실측 박스 (data_loader.py 산출물) — 있으면 CARTONS에 자동 병합
+#   · master_data.py 는 양산 엑셀에서 자동 생성됨 (부품 코드→박스 정답지 포함)
+#   · 파일이 없거나 import 실패해도 대시보드는 정상 동작 (안전 폴백)
+# ---------------------------------------------------------------------------
+try:
+    from master_data import PRODUCTION_BOXES, PART_LOOKUP
+    _existing = {b["박스명"] for b in CARTONS}
+    CARTONS = CARTONS + [b for b in PRODUCTION_BOXES if b["박스명"] not in _existing]
+except ImportError:
+    PART_LOOKUP = {}
+
 DANPLA = [
     _box("단플라 박스1", "554*554*302 (8mm)", 554, 554, 302, "8mm"),
     _box("단플라 박스2", "420*320*170 (5mm)", 420, 320, 170, "5mm"),
