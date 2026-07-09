@@ -367,7 +367,7 @@ with st.sidebar:
         up3d = st.file_uploader("STL / OBJ / PLY 업로드",
                                 type=mesh_loader.SUPPORTED, key="mesh_up",
                                 help="NX: 파일 → 내보내기 → STL 로 저장 후 업로드하세요. "
-                                     "제품이 비스듬해도 가장 타이트한 L/W/H를 뽑습니다.")
+                                     "제품 좌표축 기준으로 L/W/H를 측정합니다 (NX 측정값과 동일).")
         if up3d is not None:
             sig = (up3d.name, up3d.size)
             if st.session_state.get("_mesh_sig") != sig:
@@ -675,7 +675,7 @@ if view == VIEWS[0]:
                         + stat_card("부피", f"{_vol_cc:g}" if _vol_cc else "-",
                                     "cm³" if _vol_cc else ""),
                         unsafe_allow_html=True)
-                    st.caption("최소 바운딩박스 기준 · 3D 파일에서 자동 측정")
+                    st.caption("제품 좌표축 기준(NX 측정값과 동일) · 3D 파일에서 자동 측정")
         # 층 슬라이더는 컬럼 위에 → 3D 차트 상단과 우측 첫 카드 상단이 정렬됨
         sel = _lay
         if _c > 0 and _r > 0 and _lay > 1:

@@ -76,16 +76,11 @@ def load_mesh(data_bytes, filename):
 
     note = ""
 
-    # --- 치수: 최소 바운딩박스(OBB) 우선, 실패 시 축정렬(AABB) ---
-    try:
-        from trimesh.bounds import oriented_bounds
-        _, dims_src = oriented_bounds(mesh)   # (변환행렬, extents)
-    except Exception:
-        dims_src = mesh.extents
-        note = "최소 바운딩박스 계산 불가 → 축정렬 기준으로 측정했습니다."
-
-    dims = tuple(sorted((int(round(float(x))) for x in dims_src), reverse=True))
-    aabb = tuple(int(round(float(x))) for x in mesh.extents)
+    # --- 치수: 제품 좌표축 기준 바운딩박스(AABB) = NX/CAD 측정값과 동일 ---
+    # 최소회전박스(OBB)는 부피는 작지만 제품을 기울인 값이라 실제 포장 방향과
+    # 어긋나고(특히 높이 과소평가) NX 측정값과 불일치 → 사용하지 않는다.
+    dims = tuple(sorted((round(float(x), 1) for x in mesh.extents), reverse=True))
+    aabb = dims
 
     try:
         volume = float(mesh.volume) if mesh.is_watertight else 0.0
