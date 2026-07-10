@@ -85,9 +85,10 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 
 /* ---------- KPI 카드 ---------- */
 .kpi-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;margin:.2rem 0 .3rem;}
-.kpi-card{flex:1;min-width:160px;
+.kpi-card{flex:1;min-width:170px;min-height:142px;
+  display:flex;flex-direction:column;justify-content:center;
   background:linear-gradient(160deg,#1a2029,#141922);
-  border:1px solid #2a3140;border-radius:16px;padding:18px 20px;
+  border:1px solid #2a3140;border-radius:16px;padding:22px 24px;
   position:relative;overflow:hidden;
   box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px -14px rgba(0,0,0,.6);
   animation:kpiIn .5s cubic-bezier(.2,.7,.3,1) both;
@@ -99,17 +100,19 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .kpi-card::after{content:"";position:absolute;right:-42px;top:-42px;width:120px;height:120px;
   border-radius:50%;background:radial-gradient(circle,rgba(57,135,229,.14),transparent 70%);}
 .kpi-card.total{flex:1.35;
-  background:linear-gradient(160deg,rgba(25,158,112,.22),#141c1c 62%);
-  border-color:rgba(64,214,160,.45);
-  box-shadow:0 0 0 1px rgba(64,214,160,.12) inset,0 14px 40px -16px rgba(20,120,84,.6);}
+  background:linear-gradient(160deg,rgba(25,158,112,.15),#141c1c 66%);
+  border-color:rgba(64,214,160,.30);
+  box-shadow:0 0 0 1px rgba(64,214,160,.07) inset,0 14px 46px -22px rgba(64,214,160,.42);}
+.kpi-card.total:hover{border-color:rgba(64,214,160,.45);
+  box-shadow:0 0 0 1px rgba(64,214,160,.10) inset,0 20px 52px -22px rgba(64,214,160,.5);}
 .kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
-.kpi-card.total::after{background:radial-gradient(circle,rgba(64,214,160,.22),transparent 70%);}
+.kpi-card.total::after{background:radial-gradient(circle,rgba(64,214,160,.14),transparent 72%);}
 .kpi-label{font-size:.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;
   position:relative;z-index:1;}
 .kpi-value{font-size:2.15rem;font-weight:800;color:var(--text);line-height:1.02;
   font-variant-numeric:tabular-nums;position:relative;z-index:1;}
 .kpi-card.total .kpi-value{font-size:2.7rem;color:#48e0aa;
-  text-shadow:0 0 26px rgba(64,214,160,.35);}
+  text-shadow:0 0 20px rgba(64,214,160,.24);}
 .kpi-unit{font-size:.95rem;font-weight:600;color:var(--muted);margin-left:5px;}
 .kpi-sub{font-size:.74rem;color:var(--muted);margin-top:9px;position:relative;z-index:1;}
 .kpi-op{display:flex;align-items:center;font-size:1.6rem;color:#5b6b7d;font-weight:800;}
@@ -194,8 +197,9 @@ def kpi_row(cards):
     for c in cards:
         if c.get("op"):
             html.append(f'<div class="kpi-op">{c["op"]}</div>')
+        _style = f' style="flex:{c["w"]}"' if c.get("w") else ""
         html.append(
-            f'<div class="kpi-card {c.get("variant","")}">'
+            f'<div class="kpi-card {c.get("variant","")}"{_style}>'
             f'<div class="kpi-label">{c["label"]}</div>'
             f'<div class="kpi-value">{c["value"]}'
             f'<span class="kpi-unit">{c.get("unit","")}</span></div>'
@@ -772,17 +776,18 @@ if view == VIEWS[0]:
                 if _bpc else 0
             kpi_row([
                 {"label": f"파렛트당 박스 · {_pal_name.split(' ')[0]}", "value": f"{_bpp:,}",
-                 "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단"},
+                 "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단", "w": 1},
                 {"label": "파렛트당 총 제품", "value": f"{_bpp * _total:,}", "unit": "개",
-                 "op": "→", "variant": "total"},
+                 "op": "→", "variant": "total", "w": 1.2},
             ])
             kpi_row([
                 {"label": f"{_con_name} 당 박스", "value": f"{_bpc:,}", "unit": "박스",
-                 "sub": f"3D 배열 {_cgrid[0]}×{_cgrid[1]}×{_cgrid[2]} · 박스 {_boxcbm:.3f} CBM"},
+                 "sub": f"3D 배열 {_cgrid[0]}×{_cgrid[1]}×{_cgrid[2]} · 박스 {_boxcbm:.3f} CBM",
+                 "w": 1},
                 {"label": f"{_con_name} 당 총 제품", "value": f"{_bpc * _total:,}", "unit": "개",
-                 "op": "→", "variant": "total"},
+                 "op": "→", "variant": "total", "w": 1.2},
                 {"label": "컨테이너 적입률", "value": f"{_fill:.0f}", "unit": "%",
-                 "sub": "박스 부피 합 ÷ 컨테이너 부피"},
+                 "sub": "박스 부피 합 ÷ 컨테이너 부피", "w": 0.8},
             ])
             st.caption("※ 파렛트/컨테이너 표준 규격 기준. 실제 규격은 `data.py`에서 조정 가능합니다.")
             st.markdown("")
