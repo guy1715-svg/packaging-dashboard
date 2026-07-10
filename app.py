@@ -173,6 +173,17 @@ div[role="radiogroup"] > label:has(input:checked){background:rgba(57,135,229,.12
 .cta .go{white-space:nowrap;background:linear-gradient(135deg,#3987e5,#2a6fc4);
   color:#fff;font-weight:700;font-size:.9rem;padding:10px 18px;border-radius:10px;
   box-shadow:0 6px 18px -6px rgba(57,135,229,.7);}
+
+/* ---------- 기록 저장 카드(폼) ---------- */
+[data-testid="stForm"]{border:1px solid var(--border) !important;border-radius:16px;
+  background:linear-gradient(180deg,#161b23,#12161d);
+  padding:22px 24px 18px !important;box-shadow:0 10px 30px -18px rgba(0,0,0,.7);}
+[data-testid="stForm"] [data-testid="stHorizontalBlock"]{gap:1.4rem;}
+[data-testid="stForm"] [data-testid="stVerticalBlock"]{gap:.9rem;}
+[data-testid="stForm"] label p{font-size:.82rem !important;color:var(--muted) !important;
+  font-weight:600;}
+[data-testid="stForm"] textarea{background:var(--surface2) !important;
+  border-radius:10px !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -818,20 +829,28 @@ if view == VIEWS[0]:
                     st.session_state["_last_tbl_row"] = _r0
                     pick_box(df.iloc[_r0]["박스명"])
 
-            # 박스별 적재량 비교 차트
+            # 박스별 적재량 비교 차트 (선택 박스=에메랄드, 나머지=차콜)
             _bars = df[df["박스당 총 제품"] > 0]
             if not _bars.empty:
+                _sel_name = sel_row["박스명"]
+                _colors = ["#40d6a0" if n == _sel_name else "#39424f"
+                           for n in _bars["박스명"]]
                 _cfig = go.Figure(go.Bar(
                     x=_bars["박스명"], y=_bars["박스당 총 제품"],
-                    marker_color=["#40d6a0" if n == sel_row["박스명"]
-                                  else "#3987e5" for n in _bars["박스명"]],
+                    marker=dict(color=_colors, cornerradius=5, line=dict(width=0)),
+                    text=_bars["박스당 총 제품"], texttemplate="%{text:,}",
+                    textposition="outside", textfont=dict(size=10, color="#aeb9c5"),
+                    cliponaxis=False,
                     hovertemplate="%{x}<br>%{y:,}개<extra></extra>"))
                 _cfig.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    height=260, margin=dict(l=0, r=0, t=8, b=0),
-                    yaxis=dict(title="박스당 총 제품", gridcolor="#2a3140",
-                               color="#8b98a5"),
-                    xaxis=dict(color="#8b98a5"))
+                    height=280, margin=dict(l=0, r=0, t=22, b=0), bargap=0.4,
+                    font=dict(color="#8b98a5", size=11, family="Inter, sans-serif"),
+                    uniformtext=dict(minsize=8, mode="hide"),
+                    yaxis=dict(visible=False, showgrid=False, zeroline=False),
+                    xaxis=dict(type="category", showgrid=False, zeroline=False,
+                               showline=False, ticks="", color="#8b98a5",
+                               tickfont=dict(size=10.5)))
                 st.plotly_chart(_cfig, use_container_width=True,
                                 config={"displayModeBar": False})
 
@@ -843,15 +862,19 @@ if view == VIEWS[0]:
         if _sim is not None and not _sim.empty:
             st.info(f"💡 비슷한 사이즈 과거 기록 **{len(_sim)}건**이 있어요. "
                     "'📚 기록 관리'에서 실제 적용 이력을 확인하세요.")
-        st.caption("대시보드 추천값이 기본으로 채워집니다. 현장에서 실제 적용한 값이 다르면 수정 후 저장하세요.")
-        rc1, rc2, rc3 = st.columns(3)
-        real_inner = rc1.text_input("실제 포장재", value=inner_mode)
-        real_box = rc2.text_input("실제 적용 박스", value=sel_row["박스명"])
-        real_qty = rc3.number_input("실제 적용 수량", min_value=0,
-                                    value=int(sel_row["박스당 총 제품"]), step=1)
-        memo = st.text_input("현실화 메모 / 비고", value="",
-                             placeholder="예: 추천은 55-2였으나 재고 문제로 T-10 적용")
-        if st.button("💾 기록 저장", type="primary", use_container_width=True):
+        with st.form("record_form", border=True):
+            st.caption("대시보드 추천값이 기본으로 채워집니다. 현장에서 실제 적용한 값이 "
+                       "다르면 수정 후 저장하세요.")
+            rc1, rc2, rc3 = st.columns(3, gap="large")
+            real_inner = rc1.text_input("실제 포장재", value=inner_mode)
+            real_box = rc2.text_input("실제 적용 박스", value=sel_row["박스명"])
+            real_qty = rc3.number_input("실제 적용 수량", min_value=0,
+                                        value=int(sel_row["박스당 총 제품"]), step=1)
+            memo = st.text_area("현실화 메모 / 비고", value="", height=84,
+                                placeholder="예: 추천은 55-2였으나 재고 문제로 T-10 적용")
+            _saved = st.form_submit_button("💾 기록 저장", type="primary",
+                                           use_container_width=True)
+        if _saved:
             if not (customer or part_name):
                 st.warning("고객사 또는 품명을 입력한 뒤 저장하세요.")
             else:
