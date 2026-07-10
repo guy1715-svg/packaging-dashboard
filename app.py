@@ -297,12 +297,16 @@ def packing_fig_3d(nx, ny, nz, active_layers=None, top_count=None,
     _m = max(box_l, box_w, box_h) or 1
     aspect = dict(x=(box_l / _m) or 1, y=(box_w / _m) or 1, z=(box_h / _m) or 1) \
         if (box_l and box_w and box_h) else dict(x=1, y=1, z=1)
+    # 축·격자·배경을 모두 끈 '허공' 씬 (박스만 깔끔히 떠 있게)
+    _clean_axis = dict(visible=False, showgrid=False, showline=False,
+                       zeroline=False, showbackground=False, showticklabels=False,
+                       showspikes=False, title="")
     fig = go.Figure(data)
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=0, b=0),
         height=430, showlegend=False,
         scene=dict(
-            xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
+            xaxis=_clean_axis, yaxis=_clean_axis, zaxis=_clean_axis,
             bgcolor="rgba(0,0,0,0)", aspectmode="manual", aspectratio=aspect,
             domain=dict(x=[0, 1], y=[0, 1]),
             camera=dict(eye=dict(x=1.55, y=1.45, z=1.08)),
@@ -479,39 +483,36 @@ with st.sidebar:
             _fit = fit_zipper_bag(product, _bags) or (_bags[-1] if _bags else None)
             _names = [f'{bg["박스명"]} · {bg["size"]}' for bg in _bags]
             _idx = _bags.index(_fit) if _fit in _bags else 0
-            _sel = st.selectbox("지퍼백 규격 (자동 추천 · 변경 가능)", _names, index=_idx,
-                                help="제품이 들어가는 최소 규격을 자동 추천합니다.")
-            _chosen = _bags[_names.index(_sel)]
-            _cap_sel = bag_layer_capacity(product, _chosen)   # 선택 봉투 입수
-            _per_layer = _cap_sel or 1
-
-            _size_disp = _chosen["size"].replace("*", "×")   # 마크다운 * 이탤릭 방지
-            # ── 선택한 봉투 기준 입수 (규격 변경 시 즉시 재계산·반영) ──
-            if _cap_sel > 0:
-                st.caption(f"📋 선택 봉투 **{_chosen['박스명']} ({_size_disp})** → "
-                           f"한 봉지 **{_cap_sel}개** "
-                           f"(제품 {pl:g}×{pw:g}×{ph:g} 한 겹 가득)")
-            else:
-                st.warning(f"⚠️ 제품({pl:g}×{pw:g}×{ph:g})이 "
-                           f"{_chosen['박스명']}({_size_disp})에 들어가지 않습니다. "
-                           "더 큰 규격을 선택하세요.")
-
-            # ── 전체 봉투 비교 (참고 · 제품 크기 고정) ──
+            # 전체 봉투 비교 (참고값) — 장황한 안내 대신 selectbox 툴팁 속으로
             _caps = [(bg["박스명"], bg["size"], bag_layer_capacity(product, bg))
                      for bg in _bags]
             _pos = [c for _, _, c in _caps if c > 0]
-            if _pos:
-                st.caption(f"↕️ 전체 봉투 입수 범위(참고): 최소 {min(_pos):,}개 ~ "
-                           f"최대 {max(_pos):,}개 · 규격이 클수록 많이 들어감")
-                if st.checkbox("봉투별 입수 상세 보기", value=False):
-                    st.dataframe(
-                        pd.DataFrame([{"지퍼백": n, "규격": s,
-                                       "입수(개)": c if c > 0 else "안 들어감",
-                                       "선택": "✅" if n == _chosen["박스명"] else ""}
-                                      for n, s, c in _caps]),
-                        hide_index=True, use_container_width=True)
+            _range_txt = (f" · 전체 봉투 입수 {min(_pos):,}~{max(_pos):,}개"
+                          if _pos else "")
+            _sel = st.selectbox(
+                "지퍼백 규격 (자동 추천 · 변경 가능)", _names, index=_idx,
+                help=f"제품 {pl:g}×{pw:g}×{ph:g} 기준, 들어가는 최소 규격을 자동 추천합니다."
+                     f"{_range_txt}. 규격이 클수록 한 봉지에 많이 들어갑니다.")
+            _chosen = _bags[_names.index(_sel)]
+            _cap_sel = bag_layer_capacity(product, _chosen)   # 선택 봉투 입수
+            _per_layer = _cap_sel or 1
+            _size_disp = _chosen["size"].replace("*", "×")   # 마크다운 * 이탤릭 방지
+
+            # ── 한 줄 요약 캡션 (규격 변경 시 즉시 재계산·반영) ──
+            if _cap_sel > 0:
+                st.caption(f"✅ 한 봉지 **{_cap_sel}개** · {_chosen['박스명']} ({_size_disp})")
+            elif _pos:
+                st.caption(f"⚠️ 이 규격엔 안 들어감 · 더 큰 규격을 선택하세요")
             else:
-                st.warning("이 제품이 들어가는 지퍼백이 없습니다. 규격을 확인하세요.")
+                st.caption("⚠️ 들어가는 지퍼백이 없습니다 · 규격을 확인하세요")
+
+            if _pos and st.checkbox("봉투별 입수 상세 보기", value=False):
+                st.dataframe(
+                    pd.DataFrame([{"지퍼백": n, "규격": s,
+                                   "입수(개)": c if c > 0 else "안 들어감",
+                                   "선택": "✅" if n == _chosen["박스명"] else ""}
+                                  for n, s, c in _caps]),
+                    hide_index=True, use_container_width=True)
 
             _override = st.checkbox("입수 직접 지정", value=False,
                                     help="추천값 대신 원하는 입수를 직접 넣습니다.")
@@ -696,15 +697,15 @@ if view == VIEWS[0]:
                                     "cm³" if _vol_cc else ""),
                         unsafe_allow_html=True)
                     st.caption("제품 좌표축 기준(NX 측정값과 동일) · 3D 파일에서 자동 측정")
-        # 층 슬라이더는 컬럼 위에 → 3D 차트 상단과 우측 첫 카드 상단이 정렬됨
-        # 슬라이더 최대치는 '실제 적재 가능한 층수'(무게 제한 반영)로 동적 축소
-        sel = _eff_layers
-        if _c > 0 and _r > 0 and _eff_layers > 1:
-            sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _eff_layers, _eff_layers,
-                            help="실제 적재 가능한 층까지만 선택됩니다(무게 제한 반영) · "
-                                 "맨 위 층 초록 강조 · 드래그 회전 / 스크롤 확대")
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
+            # 슬라이더를 3D 차트와 같은 컬럼 안에 묶어 가로 폭을 맞춤
+            # (max 는 실제 적재 가능한 층수 = 무게 제한 반영으로 동적 축소)
+            sel = _eff_layers
+            if _c > 0 and _r > 0 and _eff_layers > 1:
+                sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _eff_layers, _eff_layers,
+                                help="실제 적재 가능한 층까지만 선택됩니다(무게 제한 반영) · "
+                                     "맨 위 층 초록 강조 · 드래그 회전 / 스크롤 확대")
             if _c > 0 and _r > 0:
                 cum_qty = min(_per_layer * sel, _total)
                 cum_h = round(sel * _layer_h)
