@@ -95,18 +95,15 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
   transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
 .kpi-card:hover{transform:translateY(-4px);border-color:#3d4757;
   box-shadow:0 16px 36px -16px rgba(0,0,0,.75);}
-.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
-  background:linear-gradient(180deg,var(--accent),#2a6fc4);}
-.kpi-card::after{content:"";position:absolute;right:-42px;top:-42px;width:120px;height:120px;
-  border-radius:50%;background:radial-gradient(circle,rgba(57,135,229,.14),transparent 70%);}
+.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg,var(--accent),#2a6fc4);opacity:.7;}
 .kpi-card.total{flex:1.35;
   background:linear-gradient(160deg,rgba(25,158,112,.15),#141c1c 66%);
   border-color:rgba(64,214,160,.30);
   box-shadow:0 0 0 1px rgba(64,214,160,.07) inset,0 14px 46px -22px rgba(64,214,160,.42);}
 .kpi-card.total:hover{border-color:rgba(64,214,160,.45);
   box-shadow:0 0 0 1px rgba(64,214,160,.10) inset,0 20px 52px -22px rgba(64,214,160,.5);}
-.kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
-.kpi-card.total::after{background:radial-gradient(circle,rgba(64,214,160,.14),transparent 72%);}
+.kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);opacity:1;}
 .kpi-label{font-size:.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;
   position:relative;z-index:1;}
 .kpi-value{font-size:2.15rem;font-weight:800;color:var(--text);line-height:1.02;
@@ -148,11 +145,11 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .stat .v{font-size:1.5rem;font-weight:800;color:var(--text);
   font-variant-numeric:tabular-nums;line-height:1.05;}
 .stat .u{font-size:.8rem;color:var(--muted);font-weight:600;margin-left:4px;}
-.stat.hi{background:linear-gradient(160deg,rgba(25,158,112,.22),#141c1c 62%);
-  border:1px solid rgba(64,214,160,.55);
-  box-shadow:0 0 0 1px rgba(64,214,160,.25),0 0 24px -6px rgba(64,214,160,.5);}
+.stat.hi{background:linear-gradient(160deg,rgba(25,158,112,.10),#141922 66%);
+  border:1px solid rgba(64,214,160,.22);
+  box-shadow:0 6px 18px -12px rgba(0,0,0,.6);}
 .stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
-.stat.hi .v{color:#48e0aa;font-size:1.95rem;text-shadow:0 0 20px rgba(64,214,160,.3);}
+.stat.hi .v{color:#5fd6a6;font-size:1.95rem;}
 
 /* ---------- 탭(라디오 기반) ---------- */
 div[role="radiogroup"]{gap:4px;border-bottom:1px solid var(--border);margin-bottom:.4rem;}
@@ -300,8 +297,8 @@ def packing_fig_3d(nx, ny, nz, active_layers=None, top_count=None,
                     placed_in_top += 1
                 else:
                     ghost.append((i, j, k))
-    data = [_box_edges(dx, dy, dz),
-            _dim_labels(dx, dy, dz, box_l, box_w, box_h)]
+    # 치수 텍스트는 위쪽 배지·'박스 규격' 카드에 이미 표시되므로 3D에는 생략(잘림·중복 방지)
+    data = [_box_edges(dx, dy, dz)]
     if ghost:
         data.append(_cuboids_mesh(ghost, "#3a5a86", 0.09))   # 잔여공간(옅은 코발트)
     if solid:
