@@ -279,10 +279,10 @@ def packing_fig_3d(nx, ny, nz, active_layers=None, top_count=None,
     active_layers=N 이면 1~N층을 채워 표시(맨 위 층 초록 강조), N+1층부터는 반투명 잔여 공간.
     top_count 을 주면 맨 위(N층)에는 그 개수만 채워 그림(무게 제한 자투리 층 표현).
     """
-    cap = 8
-    dx = max(min(int(nx), cap), 1)
-    dy = max(min(int(ny), cap), 1)
-    dz = max(min(int(nz), cap), 1)
+    XY_CAP, Z_CAP = 8, 40      # 바닥 격자는 8×8까지 축약, 층수는 40층까지 실제 표시
+    dx = max(min(int(nx), XY_CAP), 1)
+    dy = max(min(int(ny), XY_CAP), 1)
+    dz = max(min(int(nz), Z_CAP), 1)
     N = active_layers if active_layers else dz
     layer_area = dx * dy
     # 맨 위 층에 실제로 놓일 블록 수(자투리). None/과대 → 가득 채움.
@@ -716,34 +716,40 @@ if view == VIEWS[0]:
                     st.caption("제품 좌표축 기준(NX 측정값과 동일) · 3D 파일에서 자동 측정")
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
-            # 슬라이더를 3D 차트와 같은 컬럼 안에 묶어 가로 폭을 맞춤
-            # (max 는 실제 적재 가능한 층수 = 무게 제한 반영으로 동적 축소)
-            sel = _eff_layers
-            if _c > 0 and _r > 0 and _eff_layers > 1:
-                sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _eff_layers, _eff_layers,
-                                help="실제 적재 가능한 층까지만 선택됩니다(무게 제한 반영) · "
-                                     "맨 위 층 초록 강조 · 드래그 회전 / 스크롤 확대")
+            # 슬라이더를 3D 차트와 같은 컬럼에 묶고, 3D가 실제로 그리는 층수까지만 허용
+            # (그림·슬라이더 최대치를 일치시켜 '슬라이더는 24인데 그림은 8' 혼란 제거)
+            _ZCAP = 40                               # 3D가 표시하는 최대 층수(packing_fig_3d 와 동일)
+            _disp_layers = min(_eff_layers, _ZCAP)   # 그림에 그려지는 실제 층수
+            sel = _disp_layers
+            if _c > 0 and _r > 0 and _disp_layers > 1:
+                sel = st.slider("적층 선택 (1층 ~ N층 누적)", 1, _disp_layers, _disp_layers,
+                                help="1층부터 선택한 층까지 채워 표시 · 맨 위 층 초록 강조 · "
+                                     "드래그 회전 / 스크롤 확대")
             if _c > 0 and _r > 0:
                 cum_qty = min(_per_layer * sel, _total)
                 cum_h = round(sel * _layer_h)
                 # 선택한 맨 위(sel) 층에 실제로 놓이는 블록 수 (자투리 층이면 < 층당개수)
                 _top_cnt = cum_qty - _per_layer * (sel - 1)
                 st.plotly_chart(
-                    packing_fig_3d(_c, _r, _eff_layers, active_layers=sel,
+                    packing_fig_3d(_c, _r, _disp_layers, active_layers=sel,
                                    top_count=_top_cnt,
                                    box_l=_bl, box_w=_bw, box_h=_bh),
                     use_container_width=True, config={"displayModeBar": False})
-                _disp_trunc = _c > 8 or _r > 8 or _eff_layers > 8
+                _grid_trunc = _c > 8 or _r > 8      # 바닥 격자만 8×8로 축약
+                _layer_trunc = _eff_layers > _ZCAP  # 층수가 상한 초과 시에만
                 _partial = _top_cnt < _per_layer
                 cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개까지 가능하지만 "
                             f"'{sel_row['제한 요인']}'으로 {_total:,}개에서 적재를 멈춥니다") if _capped else ""
                 partial_note = (f"  ·  맨 위 {sel}층은 자투리 <b>{_top_cnt}개</b>만 적재"
                                 if _partial else "")
-                trunc_note = "  ·  격자가 커서 그림은 최대 8×8로 축약 표시" if _disp_trunc else ""
+                grid_note = "  ·  바닥 격자가 커서 그림은 8×8로 축약" if _grid_trunc else ""
+                layer_note = (f"  ·  {_eff_layers}층 중 {_ZCAP}층까지만 그림 표시"
+                              if _layer_trunc else "")
                 st.markdown(
                     f'<div style="font-size:12.5px;color:#8b98a5;margin-top:2px;">'
-                    f'🧊 {_c}×{_r} 격자 × {_eff_layers}층{partial_note}{trunc_note}{cap_note}'
-                    f'</div>', unsafe_allow_html=True)
+                    f'🧊 {_c}×{_r} 격자 × {_eff_layers}층'
+                    f'{partial_note}{grid_note}{layer_note}{cap_note}</div>',
+                    unsafe_allow_html=True)
                 st.markdown(
                     '<div class="cta" style="margin-top:4px;padding:13px 18px;">'
                     f'<div><div class="t">📐 1층 ~ {sel}층 누적</div>'
