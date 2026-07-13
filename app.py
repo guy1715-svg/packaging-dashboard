@@ -605,19 +605,6 @@ if is_tray and tray_custom:
                           tray_maker, tray_color] if x]
     tray_info = " · ".join(_parts)
 
-# 컨텍스트 칩 바
-_wchip = f'<span class="chip"><b>무게</b> {unit_weight_g:g} g</span>' if unit_weight_g else ""
-_bchip = f'<span class="chip"><b>지퍼백</b> {bag_name}</span>' if (is_bag and bag_name) else ""
-_pchip = f'<span class="chip"><b>품명</b> {part_name}</span>' if part_name else ""
-st.markdown(
-    '<div class="ctxbar">'
-    f'{_pchip}'
-    f'<span class="chip"><b>포장재</b> {inner_mode}</span>'
-    f'<span class="chip"><b>박스</b> {outer_group}</span>'
-    f'<span class="chip"><b>제품(mm)</b> {pl:g}×{pw:g}×{ph:g}</span>'
-    f'{_wchip}{_bchip}'
-    '</div>', unsafe_allow_html=True)
-
 # ---------------------------------------------------------------------------
 # 탭 구성
 # ---------------------------------------------------------------------------
@@ -693,7 +680,6 @@ if view == VIEWS[0]:
             f'<span class="badge">세로 <b>{_bw:g}</b></span>'
             f'<span class="badge g">높이 <b>{_bh:g}</b></span>'
             '<span class="badge unit">mm</span>'
-            f'<span class="badge">📦 {sel_row["규격(Size)"]}</span>'
             '</div>', unsafe_allow_html=True)
         # 업로드한 실제 제품 3D 형상 미리보기 (있을 때만)
         _mg = st.session_state.get("_mesh_geom")
@@ -760,47 +746,45 @@ if view == VIEWS[0]:
             else:
                 st.info("이 조합은 적재되지 않습니다.")
         with stt:
+            # 상단 '추천 박스'·배지줄과 중복되는 카드는 빼고, 배치도를 설명하는 2개만
             st.markdown(
-                stat_card("박스당 총 제품", f"{_total:,}", "개", hi=True)
-                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u)
-                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층")
-                + stat_card("박스 규격(mm)", f"{_bl:g}×{_bw:g}×{_bh:g}", ""),
+                stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u, hi=True)
+                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층"),
                 unsafe_allow_html=True)
         st.markdown("")
 
-        # 🚚 물류 적재 (파렛트 · 컨테이너)
+        # 🚚 물류 적재 (파렛트 · 컨테이너) — 보조 정보라 기본 접힘
         if _total > 0 and _bl and _bw and _bh:
-            section("🚚 물류 적재 (파렛트 · 컨테이너)")
-            lc1, lc2, lc3 = st.columns(3)
-            _pal_name = lc1.selectbox("파렛트 규격", list(PALLETS.keys()))
-            _con_name = lc2.selectbox("컨테이너", list(CONTAINERS.keys()))
-            _pmargin = lc3.number_input("적재 높이 여유 (mm)", min_value=0.0, value=0.0,
-                                        step=10.0, help="파렛트 적재 시 상단 여유 높이")
-            _pal, _con = PALLETS[_pal_name], CONTAINERS[_con_name]
-            _bpp, _pbase, _players = boxes_per_pallet(_bl, _bw, _bh, _pal, box_margin=_pmargin)
-            _bpc, _cgrid = boxes_per_container(_bl, _bw, _bh, _con)
-            _boxcbm = cbm(_bl, _bw, _bh)
-            _fill = (_bpc * _boxcbm / cbm(_con["l"], _con["w"], _con["h"]) * 100) \
-                if _bpc else 0
-            kpi_row([
-                {"label": f"파렛트당 박스 · {_pal_name.split(' ')[0]}", "value": f"{_bpp:,}",
-                 "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단", "w": 1},
-                {"label": "파렛트당 총 제품", "value": f"{_bpp * _total:,}", "unit": "개",
-                 "op": "→", "variant": "total", "w": 1.2},
-                # 아래 컨테이너 행(3칸)과 열을 맞추기 위한 빈 칸
-                {"label": "", "value": "", "variant": "ghost", "w": 0.8},
-            ])
-            kpi_row([
-                {"label": f"{_con_name} 당 박스", "value": f"{_bpc:,}", "unit": "박스",
-                 "sub": f"3D 배열 {_cgrid[0]}×{_cgrid[1]}×{_cgrid[2]} · 박스 {_boxcbm:.3f} CBM",
-                 "w": 1},
-                {"label": f"{_con_name} 당 총 제품", "value": f"{_bpc * _total:,}", "unit": "개",
-                 "op": "→", "variant": "total", "w": 1.2},
-                {"label": "컨테이너 적입률", "value": f"{_fill:.0f}", "unit": "%",
-                 "sub": "박스 부피 합 ÷ 컨테이너 부피", "w": 0.8},
-            ])
-            st.caption("※ 파렛트/컨테이너 표준 규격 기준. 실제 규격은 `data.py`에서 조정 가능합니다.")
-            st.markdown("")
+            with st.expander("🚚 물류 적재 (파렛트 · 컨테이너)"):
+                lc1, lc2, lc3 = st.columns(3)
+                _pal_name = lc1.selectbox("파렛트 규격", list(PALLETS.keys()))
+                _con_name = lc2.selectbox("컨테이너", list(CONTAINERS.keys()))
+                _pmargin = lc3.number_input("적재 높이 여유 (mm)", min_value=0.0, value=0.0,
+                                            step=10.0, help="파렛트 적재 시 상단 여유 높이")
+                _pal, _con = PALLETS[_pal_name], CONTAINERS[_con_name]
+                _bpp, _pbase, _players = boxes_per_pallet(_bl, _bw, _bh, _pal, box_margin=_pmargin)
+                _bpc, _cgrid = boxes_per_container(_bl, _bw, _bh, _con)
+                _boxcbm = cbm(_bl, _bw, _bh)
+                _fill = (_bpc * _boxcbm / cbm(_con["l"], _con["w"], _con["h"]) * 100) \
+                    if _bpc else 0
+                kpi_row([
+                    {"label": f"파렛트당 박스 · {_pal_name.split(' ')[0]}", "value": f"{_bpp:,}",
+                     "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단", "w": 1},
+                    {"label": "파렛트당 총 제품", "value": f"{_bpp * _total:,}", "unit": "개",
+                     "op": "→", "variant": "total", "w": 1.2},
+                    # 아래 컨테이너 행(3칸)과 열을 맞추기 위한 빈 칸
+                    {"label": "", "value": "", "variant": "ghost", "w": 0.8},
+                ])
+                kpi_row([
+                    {"label": f"{_con_name} 당 박스", "value": f"{_bpc:,}", "unit": "박스",
+                     "sub": f"3D 배열 {_cgrid[0]}×{_cgrid[1]}×{_cgrid[2]} · 박스 {_boxcbm:.3f} CBM",
+                     "w": 1},
+                    {"label": f"{_con_name} 당 총 제품", "value": f"{_bpc * _total:,}", "unit": "개",
+                     "op": "→", "variant": "total", "w": 1.2},
+                    {"label": "컨테이너 적입률", "value": f"{_fill:.0f}", "unit": "%",
+                     "sub": "박스 부피 합 ÷ 컨테이너 부피", "w": 0.8},
+                ])
+                st.caption("※ 파렛트/컨테이너 표준 규격 기준. 실제 규격은 `data.py`에서 조정 가능합니다.")
 
         # 💰 원가 · 중량 (선택)
         with st.expander("💰 원가 · 출하중량 계산 (선택)"):
@@ -829,7 +813,7 @@ if view == VIEWS[0]:
         if unit_weight_g:
             show_cols.insert(7, "박스 총중량(kg)")
         with st.expander(f"📦 다른 박스 규격 및 적재량 비교하기  ({len(rows)}종) · "
-                         "행을 클릭하면 그 박스로 선택됩니다 ▾", expanded=True):
+                         "행을 클릭하면 그 박스로 선택됩니다 ▾", expanded=False):
             _ev = st.dataframe(
                 df[show_cols], use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="single-row", key="cmp_table",
