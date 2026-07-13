@@ -104,6 +104,11 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .kpi-card.total:hover{border-color:rgba(64,214,160,.45);
   box-shadow:0 0 0 1px rgba(64,214,160,.10) inset,0 20px 52px -22px rgba(64,214,160,.5);}
 .kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);opacity:1;}
+/* 빈 자리표시용 유령 카드 — 행 간 그리드 정렬을 위해 공간만 차지, 보이지 않음 */
+.kpi-card.ghost{background:transparent;border-color:transparent;box-shadow:none;
+  animation:none;}
+.kpi-card.ghost::before{display:none;}
+.kpi-card.ghost:hover{transform:none;box-shadow:none;border-color:transparent;}
 .kpi-label{font-size:.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;
   position:relative;z-index:1;}
 .kpi-value{font-size:2.15rem;font-weight:800;color:var(--text);line-height:1.02;
@@ -776,6 +781,8 @@ if view == VIEWS[0]:
                  "unit": "박스", "sub": f"바닥 {_pbase} × {_players}단", "w": 1},
                 {"label": "파렛트당 총 제품", "value": f"{_bpp * _total:,}", "unit": "개",
                  "op": "→", "variant": "total", "w": 1.2},
+                # 아래 컨테이너 행(3칸)과 열을 맞추기 위한 빈 칸
+                {"label": "", "value": "", "variant": "ghost", "w": 0.8},
             ])
             kpi_row([
                 {"label": f"{_con_name} 당 박스", "value": f"{_bpc:,}", "unit": "박스",
