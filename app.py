@@ -545,12 +545,13 @@ with st.sidebar:
     with st.expander("⚙️ 고급 옵션"):
         use_best = st.toggle("최적 방향(회전) 적재", value=True,
                              help="제품을 6방향으로 돌려 최대 적재수량을 계산합니다.")
-        wall_margin = st.number_input(
-            "박스 벽두께 여유 (mm)", min_value=0.0, value=0.0, step=1.0,
-            help="박스 규격이 외경일 때, 벽두께만큼 빼고 계산합니다. (0=규격 그대로)")
-        safety_pct = st.number_input(
+        _ac1, _ac2 = st.columns(2)
+        wall_margin = _ac1.number_input(
+            "벽두께 여유 (mm)", min_value=0.0, value=0.0, step=1.0,
+            help="박스 규격이 외경일 때 벽두께만큼 빼고 계산 (0=규격 그대로)")
+        safety_pct = _ac2.number_input(
             "적재 여유율 (%)", min_value=0.0, max_value=90.0, value=0.0, step=5.0,
-            help="이론 적재량은 실제보다 많을 수 있어요. 예: 10 → 이론 수량의 90%로 반영")
+            help="이론 적재량을 실제에 맞춰 감산. 예: 10 → 이론의 90%")
 
 # ---------------------------------------------------------------------------
 # 메인 - 계산 (제품 → 포장재 → 박스)
@@ -618,8 +619,6 @@ view = st.radio("보기", VIEWS, key="active_view",
 
 # --- 탭1: 적재 효율 ---
 if view == VIEWS[0]:
-    section(f"제품 → {inner_mode} → {outer_group}")
-
     if not rows or best_row is None:
         st.error("표시할 박스가 없습니다.")
     else:
@@ -893,13 +892,7 @@ if view == VIEWS[0]:
                 st.success(f"✅ 기록 저장됨 ({match}). '📚 기록 관리'에서 확인하세요.")
 
         st.markdown("")
-        st.markdown(
-            '<div class="cta"><div>'
-            '<div class="t">📄 이 구성으로 견적 요청서를 만들 준비가 됐어요</div>'
-            '<div class="d">아래 버튼을 누르면 <b>구매팀 견적 양식</b> 화면으로 이동해 '
-            "Excel · PDF로 내보내고 '구매 확정 단가'까지 받을 수 있어요.</div>"
-            '</div></div>', unsafe_allow_html=True)
-        st.button("📄 구매팀 견적 양식으로 이동  →", type="primary",
+        st.button("📄 구매팀 견적 양식 만들기  (Excel · PDF)  →", type="primary",
                   use_container_width=True,
                   on_click=lambda: st.session_state.update(active_view=VIEWS[1]))
         with st.expander("ℹ️ 계산 방식 보기"):
