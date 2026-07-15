@@ -86,7 +86,7 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 /* ---------- KPI 카드 ---------- */
 .kpi-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;margin:.2rem 0 .3rem;}
 .kpi-card{flex:1;min-width:170px;min-height:142px;
-  display:flex;flex-direction:column;justify-content:center;
+  display:flex;flex-direction:column;justify-content:space-between;
   background:linear-gradient(160deg,#1a2029,#141922);
   border:1px solid #2a3140;border-radius:16px;padding:22px 24px;
   position:relative;overflow:hidden;
@@ -156,16 +156,19 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
 .stat.hi .v{color:#5fd6a6;font-size:1.95rem;}
 
-/* ---------- 탭(라디오 기반) ---------- */
-div[role="radiogroup"]{gap:4px;border-bottom:1px solid var(--border);margin-bottom:.4rem;}
-div[role="radiogroup"] > label{background:transparent;border:1px solid transparent;
-  border-bottom:none;border-radius:10px 10px 0 0;padding:9px 18px;margin:0;
-  cursor:pointer;transition:background .15s,color .15s;font-weight:600;}
-div[role="radiogroup"] > label:hover{background:rgba(57,135,229,.08);}
+/* ---------- 라디오 → 세그먼트 컨트롤(연결된 토글 버튼) ---------- */
+div[role="radiogroup"]{gap:3px;background:var(--surface2);
+  border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:1rem;}
+[data-testid="stMain"] div[role="radiogroup"]{display:inline-flex;flex-wrap:wrap;}
+section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;}
+div[role="radiogroup"] > label{background:transparent;border:none;border-radius:9px;
+  padding:8px 16px;margin:0;cursor:pointer;color:var(--muted);font-weight:600;
+  font-size:.9rem;text-align:center;transition:background .15s,color .15s;}
+div[role="radiogroup"] > label:hover{background:rgba(255,255,255,.045);color:var(--text);}
 div[role="radiogroup"] > label > div:first-child{display:none;}   /* 라디오 동그라미 숨김 */
-div[role="radiogroup"] > label:has(input:checked){background:rgba(57,135,229,.12);
-  border-color:var(--border);color:#7ec8f3;
-  box-shadow:inset 0 -2px 0 var(--accent);}
+div[role="radiogroup"] > label:has(input:checked){
+  background:linear-gradient(180deg,#2b3646,#222b38);color:#eaf2fb;
+  box-shadow:0 1px 2px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);}
 
 /* ---------- 견적 유도 CTA ---------- */
 .cta{display:flex;align-items:center;justify-content:space-between;gap:14px;
@@ -654,9 +657,9 @@ if view == VIEWS[0]:
             help="추천 박스가 기본 선택됩니다. 드롭다운 또는 아래 비교표에서 골라도 됩니다.")
         pick_box(_picked)
         if sel_row is not best_row:
-            st.caption(f"ℹ️ 추천은 **{best_row['박스명']}**({best_row['박스당 총 제품']:,}개)"
-                       f"이지만 **{sel_row['박스명']}**({sel_row['박스당 총 제품']:,}개)를 "
-                       "선택했습니다.")
+            st.info(f"추천은 **{best_row['박스명']}** ({best_row['박스당 총 제품']:,}개)"
+                    f"이지만 **{sel_row['박스명']}** ({sel_row['박스당 총 제품']:,}개)를 "
+                    "선택했습니다.", icon="ℹ️")
 
         _c, _r = int(sel_row["_cols"]), int(sel_row["_rows"])
         _lay, _u = int(sel_row["_layers"]), sel_row["_unit"]
