@@ -409,14 +409,6 @@ def stat_card(label, value, unit="", hi=False):
             f'<div class="v">{value}<span class="u">{unit}</span></div></div>')
 
 
-def inch_badge(*mm_vals):
-    """inch 모드일 때 '= a×b×c in' 배지 HTML 반환(아니면 빈 문자열). unit_mode 전역 참조."""
-    if globals().get("unit_mode") == "inch":
-        vals = "×".join(f"{v / 25.4:.2f}" for v in mm_vals)
-        return f'<span class="badge unit">= {vals} in</span>'
-    return ""
-
-
 # ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
@@ -466,10 +458,6 @@ with st.sidebar:
         part_name = st.text_input("품명 (제품명/품번)", key="part_name",
                                   placeholder="예: SW-CONN-0250")
 
-    # --- ⑧ 단위(mm / inch) — 계산은 항상 mm, inch는 환산 표기 ---
-    unit_mode = st.radio("치수 단위", ["mm", "inch"], horizontal=True,
-                         help="계산은 항상 mm 기준. inch 선택 시 화면에 inch 환산값을 함께 표기합니다.")
-
     with st.expander("📐 3D 파일로 치수 자동입력 (NX → STL)"):
         if not mesh_loader.available():
             st.caption("⚠️ 3D 라이브러리(trimesh) 미설치. requirements.txt 반영 후 재배포하세요.")
@@ -509,8 +497,6 @@ with st.sidebar:
     pw = c2.number_input("W", min_value=0.1, step=1.0, key="prod_w")
     ph = c3.number_input("H", min_value=0.1, step=1.0, key="prod_h")
     product = (pl, pw, ph)
-    if unit_mode == "inch":
-        st.caption(f"= {pl/25.4:.2f} × {pw/25.4:.2f} × {ph/25.4:.2f} inch")
 
     w1, w2 = st.columns(2)
     unit_weight_g = w1.number_input(
@@ -778,7 +764,6 @@ if view == VIEWS[0]:
             f'<span class="badge">세로 <b>{_bw:g}</b></span>'
             f'<span class="badge g">높이 <b>{_bh:g}</b></span>'
             '<span class="badge unit">mm</span>'
-            f'{inch_badge(_bl, _bw, _bh)}'
             '</div>', unsafe_allow_html=True)
 
         # ④ 충진율 · ⑤ 적재 안정성 배지
