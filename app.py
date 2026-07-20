@@ -36,6 +36,8 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root{
   --bg:#0d1117; --surface:#161b22; --surface2:#1c2432; --border:#2a3140;
   --text:#e6edf3; --muted:#8b98a5; --accent:#3987e5; --accent2:#199e70; --warn:#c98500;
@@ -43,6 +45,36 @@ st.markdown("""
 .block-container{padding-top:1.4rem;padding-bottom:2.6rem;max-width:1340px;}
 h1{font-size:1.9rem !important;font-weight:800;}
 h1,h2,h3{letter-spacing:-.015em;}
+
+/* ---------- 폰트(Pretendard/Inter) · 렌더링 튜닝 ---------- */
+*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;}
+html,body,.stApp,[data-testid="stAppViewContainer"],section[data-testid="stSidebar"],
+[data-testid="stMarkdownContainer"],[data-testid="stWidgetLabel"],
+button,input,textarea,select,p,span,div,label,h1,h2,h3,h4{
+  font-family:'Pretendard','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',
+  Roboto,'Malgun Gothic',sans-serif;}
+/* Material 아이콘(펼침 화살표 등)은 아이콘 폰트 유지 — 폰트 덮어쓰기 예외 */
+[data-testid="stIconMaterial"],.material-icons,.material-symbols-rounded,
+.material-symbols-outlined,span[class*="material-symbols"]{
+  font-family:'Material Symbols Rounded','Material Symbols Outlined',
+  'Material Icons' !important;}
+
+/* ---------- 화이트라벨: Streamlit 기본 크롬 숨김 ---------- */
+[data-testid="stDecoration"]{display:none !important;}          /* 상단 장식 그라데이션 띠 */
+[data-testid="stToolbar"]{display:none !important;}             /* Deploy · 햄버거 메뉴 */
+[data-testid="stStatusWidget"]{display:none !important;}        /* 실행 상태 위젯 */
+#MainMenu{visibility:hidden !important;}
+footer{visibility:hidden !important;height:0 !important;}       /* Made with Streamlit */
+[data-testid="stHeader"]{background:transparent !important;height:0 !important;}
+
+/* ---------- 커스텀 스크롤바(다크 · 에메랄드 hover) ---------- */
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:#0d1117;}
+::-webkit-scrollbar-thumb{background:#2a3140;border-radius:8px;
+  border:2px solid #0d1117;}
+::-webkit-scrollbar-thumb:hover{background:#10b981;}
+*{scrollbar-width:thin;scrollbar-color:#2a3140 #0d1117;}
 
 /* ---------- 사이드바 ---------- */
 section[data-testid="stSidebar"]{border-right:1px solid var(--border);
@@ -129,14 +161,16 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
 .badge.g b{color:#48e0aa;}
 .badge.unit{background:transparent;border:none;color:#6b7684;padding-left:2px;}
 
-/* ---------- 슬라이더 에메랄드 통일 ---------- */
+/* ---------- 슬라이더 에메랄드(#10b981) 통일 ---------- */
+/* 핸들(둥근 조절점) */
 [data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"]{
-  background-color:#34d399 !important;
-  box-shadow:0 0 0 4px rgba(52,211,153,.22) !important;}
-/* 채워진 트랙(파랑)을 hue-rotate로 에메랄드화 (채움 위치 유지) */
+  background-color:#10b981 !important;
+  box-shadow:0 0 0 4px rgba(16,185,129,.22) !important;}
+/* 채워진 활성 트랙 — 파란 그라데이션을 에메랄드 단색으로 직접 덮어씀 */
 [data-testid="stSlider"] [data-baseweb="slider"] > div:nth-child(1) > div:nth-child(1) > div:nth-child(2){
-  filter:hue-rotate(-58deg) saturate(1.15) !important;}
-[data-testid="stSlider"] [data-testid="stThumbValue"]{color:#48e0aa !important;font-weight:700;}
+  background:#10b981 !important;background-image:none !important;}
+/* 현재값 라벨 */
+[data-testid="stSlider"] [data-testid="stThumbValue"]{color:#10b981 !important;font-weight:700;}
 
 /* ---------- 배치도 (Plotly 컨테이너 + 수치 카드) ---------- */
 [data-testid="stPlotlyChart"]{border:1px solid var(--border);border-radius:16px;
@@ -154,7 +188,14 @@ section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
   border:1px solid rgba(64,214,160,.22);
   box-shadow:0 6px 18px -12px rgba(0,0,0,.6);}
 .stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
-.stat.hi .v{color:#5fd6a6;font-size:1.95rem;}
+.stat.hi .v{color:#5fd6a6;}
+/* 우측 수치카드 2개를 3D 차트 높이에 맞춰 세로로 꽉 채움(비대칭 여백 제거) */
+.statcol{display:flex;flex-direction:column;gap:14px;min-height:430px;}
+.statcol .stat{flex:1;margin-bottom:0;display:flex;flex-direction:column;
+  justify-content:center;padding:18px 22px;}
+.statcol .stat .v{font-size:2.15rem;}
+.statcol .stat.hi .v{font-size:2.35rem;}
+.statcol .stat .l{font-size:.82rem;margin-bottom:7px;}
 
 /* ---------- 라디오 → 세그먼트 컨트롤(연결된 토글 버튼) ---------- */
 div[role="radiogroup"]{gap:3px;background:var(--surface2);
@@ -749,9 +790,12 @@ if view == VIEWS[0]:
                 st.info("이 조합은 적재되지 않습니다.")
         with stt:
             # 상단 '추천 박스'·배지줄과 중복되는 카드는 빼고, 배치도를 설명하는 2개만
+            # .statcol 로 감싸 3D 차트 높이에 맞춰 세로로 꽉 채움
             st.markdown(
-                stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u, hi=True)
-                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층"),
+                '<div class="statcol">'
+                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u, hi=True)
+                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층")
+                + '</div>',
                 unsafe_allow_html=True)
         st.markdown("")
 
