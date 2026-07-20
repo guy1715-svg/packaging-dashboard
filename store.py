@@ -54,6 +54,44 @@ def append_record(record: dict):
     return df
 
 
+PRICES_FILE = "box_prices.csv"
+PRICE_COLS = ["박스명", "확정단가", "갱신일시"]
+
+
+def load_prices():
+    """박스명 → 확정단가(원) dict. 파일 없으면 빈 dict."""
+    if os.path.exists(PRICES_FILE):
+        try:
+            df = pd.read_csv(PRICES_FILE)
+            return {str(r["박스명"]): float(r["확정단가"])
+                    for _, r in df.iterrows() if str(r["박스명"])}
+        except Exception:
+            pass
+    return {}
+
+
+def load_prices_df():
+    if os.path.exists(PRICES_FILE):
+        try:
+            return pd.read_csv(PRICES_FILE)[PRICE_COLS]
+        except Exception:
+            pass
+    return pd.DataFrame(columns=PRICE_COLS)
+
+
+def save_price(box_name, price, when=""):
+    """박스 확정단가 1건 갱신(있으면 덮어씀) 후 저장."""
+    df = load_prices_df()
+    df = df[df["박스명"].astype(str) != str(box_name)]      # 기존 항목 제거
+    row = {"박스명": box_name, "확정단가": price, "갱신일시": when}
+    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    try:
+        df[PRICE_COLS].to_csv(PRICES_FILE, index=False)
+        return True
+    except Exception:
+        return False
+
+
 def similar_records(df, dims, tol_ratio=0.15, tol_min=5.0):
     """
     현재 제품 재원(dims=(L,W,H))과 비슷한 사이즈의 과거 기록만 필터링.

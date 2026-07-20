@@ -16,7 +16,7 @@ import streamlit as st
 import plotly.graph_objects as go
 
 from data import (BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
-                  BAG_GROUP, TRAY_GROUP, PALLETS, CONTAINERS)
+                  BAG_GROUP, TRAY_GROUP, PALLETS, CONTAINERS, PART_LOOKUP)
 from calculations import (build_packaging_rows, tray_cell_count,
                           fit_zipper_bag, bag_layer_capacity,
                           boxes_per_pallet, boxes_per_container, cbm)
@@ -409,6 +409,14 @@ def stat_card(label, value, unit="", hi=False):
             f'<div class="v">{value}<span class="u">{unit}</span></div></div>')
 
 
+def inch_badge(*mm_vals):
+    """inch 모드일 때 '= a×b×c in' 배지 HTML 반환(아니면 빈 문자열). unit_mode 전역 참조."""
+    if globals().get("unit_mode") == "inch":
+        vals = "×".join(f"{v / 25.4:.2f}" for v in mm_vals)
+        return f'<span class="badge unit">= {vals} in</span>'
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
@@ -426,14 +434,41 @@ def sidebar_step(n, title):
 with st.sidebar:
     sidebar_step(1, "제품 입력")
 
-    with st.expander("🏷️ 기본 정보 (고객사·품명) · 선택"):
-        customer = st.text_input("고객사", value="", placeholder="예: 현대모비스")
-        part_name = st.text_input("품명 (제품명/품번)", value="",
-                                  placeholder="예: SW-CONN-0250")
-
-    # --- 3D 파일(STL/OBJ)에서 치수 자동 추출 ---
+    # 세션 기본값 (아래 위젯들이 이 키를 쓰므로 위젯 생성 전에 세팅)
+    st.session_state.setdefault("customer", "")
+    st.session_state.setdefault("part_name", "")
     for _k, _dv in (("prod_l", 50.0), ("prod_w", 30.0), ("prod_h", 15.0)):
         st.session_state.setdefault(_k, _dv)
+
+    # --- ① 부품코드로 불러오기 (양산 정답지 PART_LOOKUP) ---
+    #     품명·치수 위젯보다 먼저 실행해야 세션값을 갱신할 수 있음
+    if PART_LOOKUP:
+        with st.expander(f"🔎 부품코드로 불러오기 ({len(PART_LOOKUP):,}건)"):
+            _code = st.text_input("부품코드 입력/검색", key="part_code_in",
+                                  placeholder="예: BA61-04242A").strip()
+            _hit = (PART_LOOKUP.get(_code) or PART_LOOKUP.get(_code.upper())) if _code else None
+            if _hit:
+                st.caption(f"✅ **{_hit.get('item','')}** · 양산 박스 "
+                           f"**{_hit.get('carton','?')}** · 박스당 **{_hit.get('qty','?')}개**\n\n"
+                           f"박스규격 {_hit.get('L')}×{_hit.get('W')}×{_hit.get('H')} mm "
+                           f"(※ 양산 엑셀엔 제품 치수가 없어 박스 규격만 제공)")
+                if st.button("📌 이 부품 양산정보 표시", use_container_width=True):
+                    st.session_state["part_name"] = _hit.get("item", "") or _code
+                    st.session_state["_answer"] = {"code": _code, **_hit}
+                    st.rerun()
+            elif _code:
+                _cand = [c for c in PART_LOOKUP if _code.upper() in c.upper()][:8]
+                st.caption("유사 코드: " + ", ".join(_cand) if _cand
+                           else "일치하는 부품코드가 없습니다.")
+
+    with st.expander("🏷️ 기본 정보 (고객사·품명) · 선택"):
+        customer = st.text_input("고객사", key="customer", placeholder="예: 현대모비스")
+        part_name = st.text_input("품명 (제품명/품번)", key="part_name",
+                                  placeholder="예: SW-CONN-0250")
+
+    # --- ⑧ 단위(mm / inch) — 계산은 항상 mm, inch는 환산 표기 ---
+    unit_mode = st.radio("치수 단위", ["mm", "inch"], horizontal=True,
+                         help="계산은 항상 mm 기준. inch 선택 시 화면에 inch 환산값을 함께 표기합니다.")
 
     with st.expander("📐 3D 파일로 치수 자동입력 (NX → STL)"):
         if not mesh_loader.available():
@@ -474,6 +509,8 @@ with st.sidebar:
     pw = c2.number_input("W", min_value=0.1, step=1.0, key="prod_w")
     ph = c3.number_input("H", min_value=0.1, step=1.0, key="prod_h")
     product = (pl, pw, ph)
+    if unit_mode == "inch":
+        st.caption(f"= {pl/25.4:.2f} × {pw/25.4:.2f} × {ph/25.4:.2f} inch")
 
     w1, w2 = st.columns(2)
     unit_weight_g = w1.number_input(
@@ -682,8 +719,26 @@ if view == VIEWS[0]:
         cards.append({"label": "검토 박스", "value": f"{len(rows)}", "unit": "종",
                       "sub": outer_group})
         kpi_row(cards)
+
+        # ① 양산 정답지 참고 — 부품코드로 불러온 실적(박스/수량)을 참고 표시
+        _ans = st.session_state.get("_answer")
+        if _ans and _ans.get("carton"):
+            def _norm(s):
+                return str(s).upper().replace("-", "").replace(" ", "")
+            _same_box = _norm(best_row["박스명"]) == _norm(_ans["carton"])
+            _hint = ("현재 추천 박스가 양산 실적과 같습니다."
+                     if _same_box else
+                     "제품 실측 치수(또는 STL)를 입력하면 추천 결과와 비교해 보세요.")
+            st.info(f"📌 양산 실적 참고 · 부품 **{_ans['code']}**"
+                    f"({_ans.get('item','')}) → 박스 **{_ans['carton']}** · "
+                    f"박스당 **{_ans.get('qty','?')}개** (박스규격 "
+                    f"{_ans.get('L')}×{_ans.get('W')}×{_ans.get('H')} mm). {_hint}")
+
+        # ⑥ 입력 방어 — 적재 불가/무게 미입력 안내
         if best_row["박스당 총 제품"] == 0:
             st.warning("이 조합으로는 적재되지 않습니다. 제품 사이즈·트레이 설정·박스 종류를 확인하세요.")
+        elif unit_weight_g == 0:
+            st.caption("💡 제품 1개 무게를 입력하면 박스 총중량 한도(10kg) 초과를 자동으로 막아줍니다.")
         st.markdown("")
 
         # 사용할 박스 선택 (드롭다운 · 견적/기록 탭과 공유)
@@ -723,7 +778,32 @@ if view == VIEWS[0]:
             f'<span class="badge">세로 <b>{_bw:g}</b></span>'
             f'<span class="badge g">높이 <b>{_bh:g}</b></span>'
             '<span class="badge unit">mm</span>'
+            f'{inch_badge(_bl, _bw, _bh)}'
             '</div>', unsafe_allow_html=True)
+
+        # ④ 충진율 · ⑤ 적재 안정성 배지
+        if _total > 0 and _bl and _bw and _bh:
+            _box_cc = _bl * _bw * _bh / 1000.0                       # 박스 내부 부피(cm³)
+            _mg0 = st.session_state.get("_mesh_geom")
+            _unit_cc = (_mg0["volume"] / 1000.0) if (_mg0 and _mg0.get("volume")) \
+                else (pl * pw * ph / 1000.0)                          # STL 부피 우선, 없으면 외경
+            _fill = min(_unit_cc * _total / _box_cc * 100, 100) if _box_cc else 0
+            _real = "실측(STL)" if (_mg0 and _mg0.get("volume")) else "외경 기준"
+            _tip = "형상 손실 여유 있음" if _fill < 78 else "빈틈 거의 없음"
+            st.markdown(
+                '<div class="badges">'
+                f'<span class="badge">충진율 <b>{_fill:.0f}%</b></span>'
+                f'<span class="badge unit">{_real} · {_tip}</span>'
+                '</div>', unsafe_allow_html=True)
+            _warns = []
+            if unit_weight_g:
+                _bw_kg = _total * unit_weight_g / 1000.0
+                if _bw_kg > weight_limit_kg + 0.01:
+                    _warns.append(f"박스 총중량 {_bw_kg:.1f}kg 이 한도 {weight_limit_kg:g}kg 초과")
+            if _bh and min(_bl, _bw) and _bh / min(_bl, _bw) >= 2.2:
+                _warns.append("박스 높이가 밑면보다 커 적재 시 넘어짐 주의")
+            if _warns:
+                st.warning("⚠️ 적재 안정성: " + " · ".join(_warns))
         # 업로드한 실제 제품 3D 형상 미리보기 (있을 때만)
         _mg = st.session_state.get("_mesh_geom")
         if _mg and _mg.get("verts"):
@@ -832,12 +912,24 @@ if view == VIEWS[0]:
                 ])
                 st.caption("※ 파렛트/컨테이너 표준 규격 기준. 실제 규격은 `data.py`에서 조정 가능합니다.")
 
-        # 💰 원가 · 중량 (선택)
+        # 💰 원가 · 중량 (선택) — ② 구매 확정 단가 DB 연동
         with st.expander("💰 원가 · 출하중량 계산 (선택)"):
+            _prices = store.load_prices()
+            _saved_price = _prices.get(sel_row["박스명"], 0.0)
+            if _saved_price:
+                st.caption(f"💾 **{sel_row['박스명']}** 저장된 구매 확정 단가 "
+                           f"**{_saved_price:,.0f}원** 자동 반영됨")
             oc1, oc2, oc3 = st.columns(3)
-            box_price = oc1.number_input("박스 단가 (원)", min_value=0.0, value=0.0, step=50.0)
+            box_price = oc1.number_input("박스 단가 (원)", min_value=0.0,
+                                         value=float(_saved_price), step=50.0,
+                                         help="구매팀이 회신한 확정 단가. 저장하면 다음부터 자동 반영.")
             pack_price = oc2.number_input("포장재 단가/박스 (원)", min_value=0.0, value=0.0, step=10.0)
             box_self_g = oc3.number_input("박스 자체 무게 (g)", min_value=0.0, value=0.0, step=10.0)
+            if st.button(f"💾 '{sel_row['박스명']}' 확정 단가 저장", use_container_width=True,
+                         disabled=not box_price):
+                store.save_price(sel_row["박스명"], box_price,
+                                 datetime.now().strftime("%Y-%m-%d %H:%M"))
+                st.success(f"✅ {sel_row['박스명']} 단가 {box_price:,.0f}원 저장됨.")
             _unit_cost = (box_price + pack_price) / _total if _total else 0
             _ship_kg = (unit_weight_g * _total + box_self_g) / 1000 \
                 if (unit_weight_g or box_self_g) else 0
@@ -972,6 +1064,29 @@ elif view == VIEWS[1]:
                      help="기본은 선택한 박스 1종. 여러 박스 단가를 한 번에 받으려면 '전체'.")
     quote_source = [sel_row] if (scope == "선택 박스만" and sel_row) else rows
 
+    # ⑨ 견적서 옵션: 회사 로고 · 베트남어 병기 · 3D 배치도 이미지 첨부
+    with st.expander("🎨 견적서 옵션 (로고 · 언어 · 배치도 이미지)"):
+        oq1, oq2 = st.columns([1.4, 1])
+        logo_up = oq1.file_uploader("회사 로고 (PNG/JPG, 선택)",
+                                    type=["png", "jpg", "jpeg"], key="logo_up")
+        bilingual = oq2.toggle("🇻🇳 베트남어 병기", value=False,
+                               help="표 헤더를 한국어+베트남어로 병기(성우비나용).")
+        add_chart = st.checkbox("3D 적재 배치도 이미지 첨부", value=False,
+                                help="선택 박스 기준 배치도를 견적서에 이미지로 삽입(생성에 몇 초).")
+    logo_bytes = logo_up.getvalue() if logo_up else None
+    chart_png = None
+    if add_chart and sel_row:
+        try:
+            _cc, _rr, _ll = int(sel_row["_cols"]), int(sel_row["_rows"]), int(sel_row["_layers"])
+            _pb = next((b for b in outer_boxes if b["박스명"] == sel_row["박스명"]), None)
+            if _pb and _cc and _rr:
+                _fig = packing_fig_3d(_cc, _rr, min(_ll, 40), active_layers=min(_ll, 40),
+                                      box_l=_pb["inner_l"], box_w=_pb["inner_w"],
+                                      box_h=_pb["inner_h"])
+                chart_png = _fig.to_image(format="png", width=760, height=560, scale=2)
+        except Exception:
+            st.caption("⚠️ 3D 이미지 생성 실패(kaleido 미설치일 수 있음) — 이미지 없이 진행합니다.")
+
     st.markdown("##### 견적 항목  ·  구매팀이 **‘구매 확정 단가’** 열에 입력해 회신")
     if not quote_source:
         st.warning("표시할 항목이 없습니다.")
@@ -996,7 +1111,8 @@ elif view == VIEWS[1]:
         with d1:
             st.download_button(
                 "⬇️ Excel 견적 요청서 (.xlsx)",
-                data=to_excel_bytes(header_info, export_rows),
+                data=to_excel_bytes(header_info, export_rows, logo_bytes=logo_bytes,
+                                    chart_png=chart_png, bilingual=bilingual),
                 file_name=f'견적요청서_{outer_group}.xlsx',
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
@@ -1004,7 +1120,8 @@ elif view == VIEWS[1]:
         with d2:
             st.download_button(
                 "⬇️ PDF 견적 요청서 (.pdf)",
-                data=to_pdf_bytes(header_info, export_rows),
+                data=to_pdf_bytes(header_info, export_rows, logo_bytes=logo_bytes,
+                                  chart_png=chart_png, bilingual=bilingual),
                 file_name=f'견적요청서_{outer_group}.pdf',
                 mime="application/pdf",
                 use_container_width=True,
@@ -1019,14 +1136,38 @@ elif view == VIEWS[2]:
         st.info("아직 저장된 기록이 없습니다. '📊 적재 효율 계산'에서 "
                 "'💾 기록 저장'을 눌러 첫 기록을 남겨보세요.")
     else:
-        # 추천 vs 실제 적용 요약
+        # ③ 추천 vs 실제 적용 요약 통계
         if "일치" in hist.columns:
             _same = (hist["일치"].astype(str).str.contains("동일")).sum()
             _chg = len(hist) - _same
-            mm = st.columns(3)
+            _rate = _same / len(hist) * 100 if len(hist) else 0
+            mm = st.columns(4)
             mm[0].metric("총 기록", f"{len(hist)}건")
             mm[1].metric("추천대로 적용", f"{_same}건")
             mm[2].metric("변경 적용", f"{_chg}건")
+            mm[3].metric("추천 일치율", f"{_rate:.0f}%")
+
+        sc1, sc2 = st.columns(2)
+        if "실제 박스" in hist.columns:
+            _topbox = (hist["실제 박스"].astype(str).replace("", pd.NA).dropna()
+                       .value_counts().head(5))
+            with sc1:
+                st.caption("📦 가장 많이 쓴 실제 박스 Top5")
+                if not _topbox.empty:
+                    st.dataframe(_topbox.rename_axis("박스").reset_index(name="건수"),
+                                 use_container_width=True, hide_index=True)
+                else:
+                    st.caption("데이터 없음")
+        if "고객사" in hist.columns:
+            _topcust = (hist["고객사"].astype(str).replace({"": pd.NA, "-": pd.NA}).dropna()
+                        .value_counts().head(5))
+            with sc2:
+                st.caption("🏢 고객사별 건수 Top5")
+                if not _topcust.empty:
+                    st.dataframe(_topcust.rename_axis("고객사").reset_index(name="건수"),
+                                 use_container_width=True, hide_index=True)
+                else:
+                    st.caption("데이터 없음")
 
         # 비슷한 사이즈 조회
         sim = store.similar_records(hist, product)
@@ -1078,12 +1219,49 @@ elif view == VIEWS[2]:
         store.save_df(hist.iloc[0:0])
         st.warning("모든 기록을 삭제했습니다.")
 
-# --- 탭4: 기준 데이터 열람 ---
+# --- 탭4: 기준 데이터 열람 + ⑦ 카탈로그 편집 ---
 else:
     section("표준 포장재 카탈로그 (기준 데이터)")
-    st.caption("실제 값 수정은 `data.py`의 리스트(CARTONS·DANPLA·PLASTIC·ZIPPERS·TRAYS)에서 관리합니다.")
     _grp = st.selectbox("분류 선택", list(BOX_CATALOG.keys()))
-    st.dataframe(pd.DataFrame(BOX_CATALOG[_grp]), use_container_width=True, hide_index=True)
+    _base_df = pd.DataFrame(BOX_CATALOG[_grp])
+
+    tab_view, tab_edit = st.tabs(["📋 열람", "✏️ 편집 · 내보내기"])
+    with tab_view:
+        st.dataframe(_base_df, use_container_width=True, hide_index=True)
+
+    with tab_edit:
+        st.caption("화면에서 박스를 추가·수정·삭제한 뒤 **CSV로 내보내** 보관하거나, "
+                   "`master_data.py`처럼 `data.py`에 반영하세요. "
+                   "(클라우드는 재배포 시 초기화되므로 편집본은 CSV로 저장)")
+        _editcols = ["박스명", "size", "inner_l", "inner_w", "inner_h",
+                     "재질", "비고", "box_cost", "max_weight_kg"]
+        _ed_src = _base_df.reindex(columns=[c for c in _editcols if c in _base_df.columns]
+                                   or _base_df.columns)
+        edited_cat = st.data_editor(
+            _ed_src, use_container_width=True, hide_index=True, num_rows="dynamic",
+            key=f"cat_edit_{_grp}")
+        c_dl1, c_dl2 = st.columns(2)
+        c_dl1.download_button(
+            "⬇️ 이 분류 CSV 내보내기", data=edited_cat.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"catalog_{_grp}.csv", mime="text/csv", use_container_width=True)
+
+        def _to_py(df):
+            lines = [f"# {_grp} — 편집본 (data.py의 _box() 리스트에 반영)", "EDITED_BOXES = ["]
+            for _, r in df.iterrows():
+                lines.append(
+                    f'    _box({r.get("박스명","")!r}, {r.get("size","")!r}, '
+                    f'{int(r.get("inner_l") or 0)}, {int(r.get("inner_w") or 0)}, '
+                    f'{int(r.get("inner_h") or 0)}, {str(r.get("재질","") or "")!r}, '
+                    f'{str(r.get("비고","") or "")!r}),')
+            lines.append("]")
+            return "\n".join(lines) + "\n"
+        c_dl2.download_button(
+            "⬇️ data.py 형식(.py) 내보내기", data=_to_py(edited_cat).encode("utf-8"),
+            file_name=f"catalog_{_grp}.py", mime="text/x-python", use_container_width=True)
+        if st.button("↩️ 이번 세션에만 적용(미리보기)", use_container_width=True):
+            st.session_state[f"catalog_override_{_grp}"] = True
+            st.info("편집 내용은 CSV/py로 내보내야 영구 반영됩니다. "
+                    "실제 계산 반영은 `data.py` 수정 후 업로드하세요.")
 
 st.divider()
 st.caption("© 성우 개발팀 · 포장 사양 견적 대시보드")

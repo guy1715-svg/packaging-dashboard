@@ -10,18 +10,39 @@
 import io
 from datetime import date
 
+# 견적서 표 헤더 베트남어 병기 (성우비나용) ------------------------------------
+VI_HEADERS = {
+    "품명": "Tên SP", "박스종류": "Loại thùng", "박스명": "Tên thùng",
+    "규격(Size)": "Kích thước", "포장재": "Vật liệu", "적재 방식": "Cách xếp",
+    "박스당 총 제품": "SL/thùng", "제한 요인": "Giới hạn",
+    "박스 총중량(kg)": "KL/thùng(kg)", "비고": "Ghi chú",
+    "구매 확정 단가": "Đơn giá chốt",
+}
+
+
+def _col_label(col, bilingual):
+    """열 이름 (병기 옵션이면 '한국어\\nTiếng Việt')."""
+    if bilingual and col in VI_HEADERS:
+        return f"{col}\n{VI_HEADERS[col]}"
+    return col
+
 
 # ---------------------------------------------------------------------------
 # Excel 내보내기
 # ---------------------------------------------------------------------------
-def to_excel_bytes(header_info, rows):
+def to_excel_bytes(header_info, rows, logo_bytes=None, chart_png=None,
+                   bilingual=False):
     """
     header_info : dict (법인, 포장방식, 제품사이즈, 작성일 등)
     rows        : build_quote_rows() 결과 리스트
+    logo_bytes  : 회사 로고 PNG bytes (있으면 상단 삽입)
+    chart_png   : 3D 적재 배치도 PNG bytes (있으면 표 아래 삽입)
+    bilingual   : True → 표 헤더 한국어+베트남어 병기
     반환        : xlsx 파일 bytes
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.drawing.image import Image as XLImage
 
     wb = Workbook()
     ws = wb.active
@@ -31,9 +52,19 @@ def to_excel_bytes(header_info, rows):
     head_font = Font(bold=True, color="FFFFFF")
     head_fill = PatternFill("solid", fgColor="2F5597")
     confirm_fill = PatternFill("solid", fgColor="FFF2CC")  # 구매 확정 단가 강조
-    center = Alignment(horizontal="center", vertical="center")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin = Side(style="thin", color="BFBFBF")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # --- 로고 (선택) ---
+    if logo_bytes:
+        try:
+            img = XLImage(io.BytesIO(logo_bytes))
+            img.height = min(img.height, 70)
+            img.width = min(img.width, 200)
+            ws.add_image(img, "F1")
+        except Exception:
+            pass
 
     # --- 제목 ---
     ws["A1"] = "포장자재 견적 요청서 (Packaging Quotation Request)"
@@ -55,7 +86,7 @@ def to_excel_bytes(header_info, rows):
 
     columns = list(rows[0].keys())
     for c, col in enumerate(columns, start=1):
-        cell = ws.cell(row=header_row, column=c, value=col)
+        cell = ws.cell(row=header_row, column=c, value=_col_label(col, bilingual))
         cell.font = head_font
         cell.fill = head_fill
         cell.alignment = center
@@ -83,6 +114,16 @@ def to_excel_bytes(header_info, rows):
             value="※ 노란색 '구매 확정 단가' 열에 최종 단가를 입력 후 개발팀으로 회신 바랍니다.").font = Font(
         italic=True, color="C00000")
 
+    # --- 3D 적재 배치도 이미지 (선택) ---
+    if chart_png:
+        try:
+            cimg = XLImage(io.BytesIO(chart_png))
+            cimg.width = min(cimg.width, 420)
+            cimg.height = min(cimg.height, 320)
+            ws.add_image(cimg, f"A{note_row + 2}")
+        except Exception:
+            pass
+
     return _wb_to_bytes(wb)
 
 
@@ -96,14 +137,16 @@ def _wb_to_bytes(wb):
 # ---------------------------------------------------------------------------
 # PDF 내보내기 (한글 지원)
 # ---------------------------------------------------------------------------
-def to_pdf_bytes(header_info, rows):
-    """구매팀 전달용 견적 요청서 PDF bytes 생성 (한글 CID 폰트)."""
+def to_pdf_bytes(header_info, rows, logo_bytes=None, chart_png=None,
+                 bilingual=False):
+    """구매팀 전달용 견적 요청서 PDF bytes 생성 (한글 CID 폰트).
+    logo_bytes/chart_png 있으면 로고·3D 배치도 삽입, bilingual 이면 헤더 베트남어 병기."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
     from reportlab.lib.units import mm
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                    Paragraph, Spacer)
+                                    Paragraph, Spacer, Image as RLImage)
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
@@ -131,8 +174,16 @@ def to_pdf_bytes(header_info, rows):
                                 fontName=font_name, fontSize=7, leading=9,
                                 alignment=1)
 
-    elems = [Paragraph("포장자재 견적 요청서 (Packaging Quotation Request)", title_style),
-             Spacer(1, 6)]
+    elems = []
+    if logo_bytes:
+        try:
+            elems.append(RLImage(io.BytesIO(logo_bytes), width=44 * mm, height=16 * mm,
+                                 kind="proportional"))
+            elems.append(Spacer(1, 4))
+        except Exception:
+            pass
+    elems += [Paragraph("포장자재 견적 요청서 (Packaging Quotation Request)", title_style),
+              Spacer(1, 6)]
 
     meta_txt = "&nbsp;&nbsp;|&nbsp;&nbsp;".join(f"<b>{k}</b>: {v}" for k, v in header_info.items())
     elems.append(Paragraph(meta_txt, meta_style))
@@ -145,7 +196,9 @@ def to_pdf_bytes(header_info, rows):
         return buf.getvalue()
 
     columns = list(rows[0].keys())
-    data = [[Paragraph(str(c), cell_style) for c in columns]]
+    head_cell = ParagraphStyle("head", parent=cell_style, textColor=colors.white)
+    data = [[Paragraph(_col_label(c, bilingual).replace("\n", "<br/>"), head_cell)
+             for c in columns]]
     for row in rows:
         data.append([Paragraph("" if row[c] is None else str(row[c]), cell_style)
                      for c in columns])
@@ -168,6 +221,16 @@ def to_pdf_bytes(header_info, rows):
     elems.append(Spacer(1, 10))
     elems.append(Paragraph(
         "※ 노란색 '구매 확정 단가' 열에 최종 단가를 기입 후 개발팀으로 회신 바랍니다.", note_style))
+
+    if chart_png:
+        try:
+            elems.append(Spacer(1, 10))
+            elems.append(Paragraph("■ 적재 배치도 (참고)", meta_style))
+            elems.append(Spacer(1, 4))
+            elems.append(RLImage(io.BytesIO(chart_png), width=110 * mm, height=82 * mm,
+                                 kind="proportional"))
+        except Exception:
+            pass
 
     doc.build(elems)
     buf.seek(0)
