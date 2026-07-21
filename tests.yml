@@ -1,0 +1,19 @@
+name: tests
+
+# GitHub에 파일을 올리면 자동으로 계산 로직 회귀 테스트가 돌아갑니다.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # calculations.py 는 표준 라이브러리만 쓰므로 pytest 만 설치하면 됨(빠름)
+      - run: pip install pytest
+      - run: pytest -q
