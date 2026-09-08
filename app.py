@@ -445,6 +445,10 @@ with st.sidebar:
     with st.expander("⚙️ 고급 옵션"):
         use_best = st.toggle("최적 방향(회전) 적재", value=True,
                              help="제품을 6방향으로 돌려 최대 적재수량을 계산합니다.")
+        lock_height = use_best and st.checkbox(
+            "위·아래 방향 고정 (좌우 회전만 허용)", value=False,
+            help="제품에 위/아래가 정해져 있을 때(액체 주입구, 인쇄면, 파손 취약면 등) "
+                 "체크하세요. 6방향 대신 가로↔세로 2방향만 탐색합니다.")
         _ac1, _ac2 = st.columns(2)
         wall_margin = _ac1.number_input(
             "벽두께 여유 (mm)", min_value=0.0, value=0.0, step=1.0,
@@ -477,7 +481,7 @@ if is_tray and tray_l > 0 and tray_w > 0:
 rows = build_packaging_rows(
     product, outer_boxes, inner_mode=inner_mode, outer_group=outer_group,
     unit_weight_g=unit_weight_g, part_name=part_name, wall_margin=wall_margin,
-    use_best=use_best, tray_cells=tray_cells, tray_grid=tray_grid,
+    use_best=use_best, lock_height=lock_height, tray_cells=tray_cells, tray_grid=tray_grid,
     tray_l=tray_l, tray_w=tray_w, tray_thickness=tray_thickness,
     bag_name=bag_name, bag_count=bag_count, bag_l=bag_l, bag_w=bag_w, bag_h=bag_h,
     weight_limit_kg=weight_limit_kg, safety_pct=safety_pct)
@@ -602,7 +606,7 @@ if view == VIEWS[0]:
             _fill = min(_unit_cc * _total / _box_cc * 100, 100) if _box_cc else 0
             _real = "실측(STL)" if (_mg0 and _mg0.get("volume")) else "외경 기준"
             _tip = "형상 손실 여유 있음" if _fill < 78 else "빈틈 거의 없음"
-            st.caption(f"충진율 **{_fill:.0f}%** · {_real} · {_tip}")
+            st.metric("충진율 (공간 활용률)", f"{_fill:.0f}%", help=f"{_real} · {_tip}")
             _warns = []
             if unit_weight_g:
                 _bw_kg = _total * unit_weight_g / 1000.0
