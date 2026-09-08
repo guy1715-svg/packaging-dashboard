@@ -21,10 +21,21 @@ def loading_qty_axis_aligned(product, box):
     return n_l * n_w * n_h, (n_l, n_w, n_h)
 
 
-def loading_qty_best_orientation(product, box):
-    """제품을 6방향으로 돌려 최대 적재 수량. 반환: (수량, (nL,nW,nH), 제품방향)."""
+def loading_qty_best_orientation(product, box, lock_height=False):
+    """제품을 여러 방향으로 돌려 최대 적재 수량 탐색.
+
+    lock_height=False(기본) : 6방향(모든 회전) 전체 탐색 — 기존 동작과 동일.
+    lock_height=True        : 높이(제품의 3번째 값)를 고정하고 좌우(가로↔세로)
+                              2방향만 탐색. 액체 주입구·인쇄면·파손 취약면 등
+                              위/아래가 정해진 제품에 사용.
+    반환: (수량, (nL,nW,nH), 제품방향)."""
     best_qty, best_grid, best_orient = 0, (0, 0, 0), product
-    for orient in set(permutations(product)):
+    if lock_height:
+        pl, pw, ph = product
+        candidates = {(pl, pw, ph), (pw, pl, ph)}
+    else:
+        candidates = set(permutations(product))
+    for orient in candidates:
         qty, grid = loading_qty_axis_aligned(orient, box)
         if qty > best_qty:
             best_qty, best_grid, best_orient = qty, grid, orient
@@ -147,7 +158,8 @@ def cbm(l, w, h):
 
 def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
                          unit_weight_g=0.0, part_name="", wall_margin=0.0,
-                         use_best=True, tray_cells=0, tray_grid=(0, 0),
+                         use_best=True, lock_height=False,
+                         tray_cells=0, tray_grid=(0, 0),
                          tray_l=0.0, tray_w=0.0, tray_thickness=0.0,
                          bag_name="", bag_count=1, bag_l=0.0, bag_w=0.0, bag_h=0.0,
                          weight_limit_kg=10.0, safety_pct=0.0):
@@ -174,13 +186,15 @@ def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
             method = f"트레이 {tray_cells}칸 × {m_per_box}장 (바닥{base_cnt}×{layers}단)"
             dcols, drows, dlayers, dunit = tray_grid[0], tray_grid[1], m_per_box, "칸"
         elif is_bag:
-            m_per_box, grid, _ = loading_qty_best_orientation((bag_l, bag_w, bag_h), b)
+            m_per_box, grid, _ = loading_qty_best_orientation(
+                (bag_l, bag_w, bag_h), b, lock_height=lock_height)
             base_total = bag_count * m_per_box
             method = f"{bag_count}개입 지퍼백 × {m_per_box}봉 (3D {grid[0]}×{grid[1]}×{grid[2]})"
             dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "봉"
         else:
             if use_best:
-                qty, grid, _ = loading_qty_best_orientation(product, b)
+                qty, grid, _ = loading_qty_best_orientation(
+                    product, b, lock_height=lock_height)
             else:
                 qty, grid = loading_qty_axis_aligned(product, b)
             base_total = qty
