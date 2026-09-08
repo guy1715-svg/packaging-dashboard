@@ -37,227 +37,67 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-:root{
-  --bg:#0d1117; --surface:#161b22; --surface2:#1c2432; --border:#2a3140;
-  --text:#e6edf3; --muted:#8b98a5; --accent:#3987e5; --accent2:#199e70; --warn:#c98500;
-}
-.block-container{padding-top:1.4rem;padding-bottom:2.6rem;max-width:1340px;}
-h1{font-size:1.9rem !important;font-weight:800;}
+:root{ --surface:#161b22; --border:#2a3140; --muted:#8b98a5; }
+.block-container{padding-top:1.4rem;padding-bottom:2.6rem;max-width:1200px;}
+h1{font-size:1.85rem !important;font-weight:800;}
 h1,h2,h3{letter-spacing:-.015em;}
 
-/* ---------- 폰트(Pretendard/Inter) · 렌더링 튜닝 ---------- */
-*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
-  text-rendering:optimizeLegibility;}
+/* ---------- 폰트(Pretendard) ---------- */
 html,body,.stApp,[data-testid="stAppViewContainer"],section[data-testid="stSidebar"],
-[data-testid="stMarkdownContainer"],[data-testid="stWidgetLabel"],
 button,input,textarea,select,p,span,div,label,h1,h2,h3,h4{
-  font-family:'Pretendard','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',
+  font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',
   Roboto,'Malgun Gothic',sans-serif;}
-/* Material 아이콘(펼침 화살표 등)은 아이콘 폰트 유지 — 폰트 덮어쓰기 예외 */
 [data-testid="stIconMaterial"],.material-icons,.material-symbols-rounded,
 .material-symbols-outlined,span[class*="material-symbols"]{
   font-family:'Material Symbols Rounded','Material Symbols Outlined',
   'Material Icons' !important;}
 
 /* ---------- 화이트라벨: Streamlit 기본 크롬 숨김 ---------- */
-[data-testid="stDecoration"]{display:none !important;}          /* 상단 장식 그라데이션 띠 */
-[data-testid="stToolbar"]{display:none !important;}             /* Deploy · 햄버거 메뉴 */
-[data-testid="stStatusWidget"]{display:none !important;}        /* 실행 상태 위젯 */
+[data-testid="stDecoration"]{display:none !important;}
+[data-testid="stToolbar"]{display:none !important;}
+[data-testid="stStatusWidget"]{display:none !important;}
 #MainMenu{visibility:hidden !important;}
-footer{visibility:hidden !important;height:0 !important;}       /* Made with Streamlit */
+footer{visibility:hidden !important;height:0 !important;}
 [data-testid="stHeader"]{background:transparent !important;height:0 !important;}
 
-/* ---------- 커스텀 스크롤바(다크 · 에메랄드 hover) ---------- */
-::-webkit-scrollbar{width:10px;height:10px;}
-::-webkit-scrollbar-track{background:#0d1117;}
-::-webkit-scrollbar-thumb{background:#2a3140;border-radius:8px;
-  border:2px solid #0d1117;}
-::-webkit-scrollbar-thumb:hover{background:#10b981;}
-*{scrollbar-width:thin;scrollbar-color:#2a3140 #0d1117;}
-
-/* ---------- 사이드바 ---------- */
-section[data-testid="stSidebar"]{border-right:1px solid var(--border);
-  background:linear-gradient(180deg,#12161d,#0f1319);}
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:.55rem;}
-section[data-testid="stSidebar"] [data-testid="stHorizontalBlock"]{gap:.5rem;}
-section[data-testid="stSidebar"] label p,
-section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p{
-  font-size:.78rem !important;color:var(--muted) !important;font-weight:600;margin-bottom:1px;}
-[data-baseweb="input"],[data-baseweb="select"]>div{
-  background:var(--surface2) !important;border-radius:9px !important;
-  border:1px solid var(--border) !important;}
-[data-baseweb="input"]:focus-within{border-color:var(--accent) !important;
-  box-shadow:0 0 0 3px rgba(57,135,229,.18) !important;}
+/* ---------- 입력창 · 카드 테두리 (일관된 여백감만 유지) ---------- */
 .stNumberInput input,.stTextInput input{font-variant-numeric:tabular-nums;}
-/* 숫자 입력창 +/- 스텝퍼 제거 (깔끔하게) */
-[data-testid="stNumberInput"] button{display:none !important;}
+[data-testid="stNumberInput"] button{display:none !important;}   /* +/- 스텝퍼 제거 */
 [data-testid="stNumberInput"] input{text-align:left;padding-right:10px;}
 [data-testid="stExpander"]{border:1px solid var(--border);border-radius:10px;
   background:var(--surface);}
 
-/* 스텝 배지 */
-.step{display:flex;align-items:center;gap:9px;margin:.25rem 0 .4rem;font-weight:800;
-  font-size:1rem;color:var(--text);}
-.step .num{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;
-  border-radius:7px;background:linear-gradient(135deg,#3987e5,#2a6fc4);color:#fff;
-  font-size:.8rem;font-weight:800;box-shadow:0 2px 8px rgba(57,135,229,.4);}
-
-/* ---------- 컨텍스트 칩 ---------- */
-.ctxbar{display:flex;gap:8px;flex-wrap:wrap;margin:.1rem 0 1.1rem;}
-.chip{background:var(--surface);border:1px solid var(--border);border-radius:999px;
-  padding:5px 13px;font-size:.82rem;color:var(--text);white-space:nowrap;}
-.chip b{color:var(--muted);font-weight:600;margin-right:6px;font-size:.76rem;}
-
-/* ---------- 섹션 헤더 ---------- */
-.sec{display:flex;align-items:center;gap:9px;margin:1.15rem 0 .6rem;font-weight:750;
-  font-size:1.08rem;color:var(--text);}
-.sec .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
-  box-shadow:0 0 0 4px rgba(57,135,229,.16);}
-
-/* ---------- KPI 카드 ---------- */
-.kpi-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap;margin:.2rem 0 .3rem;}
-.kpi-card{flex:1;min-width:170px;min-height:142px;
-  display:flex;flex-direction:column;justify-content:space-between;
-  background:linear-gradient(160deg,#1a2029,#141922);
-  border:1px solid #2a3140;border-radius:16px;padding:22px 24px;
-  position:relative;overflow:hidden;
-  box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px -14px rgba(0,0,0,.6);
-  animation:kpiIn .5s cubic-bezier(.2,.7,.3,1) both;
-  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
-.kpi-card:hover{transform:translateY(-4px);border-color:#3d4757;
-  box-shadow:0 16px 36px -16px rgba(0,0,0,.75);}
-.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
-  background:linear-gradient(180deg,var(--accent),#2a6fc4);opacity:.7;}
-.kpi-card.total{flex:1.35;
-  background:linear-gradient(160deg,rgba(25,158,112,.15),#141c1c 66%);
-  border-color:rgba(64,214,160,.30);
-  box-shadow:0 0 0 1px rgba(64,214,160,.07) inset,0 14px 46px -22px rgba(64,214,160,.42);}
-.kpi-card.total:hover{border-color:rgba(64,214,160,.45);
-  box-shadow:0 0 0 1px rgba(64,214,160,.10) inset,0 20px 52px -22px rgba(64,214,160,.5);}
-.kpi-card.total::before{background:linear-gradient(180deg,#40d6a0,#199e70);opacity:1;}
-/* 빈 자리표시용 유령 카드 — 행 간 그리드 정렬을 위해 공간만 차지, 보이지 않음 */
-.kpi-card.ghost{background:transparent;border-color:transparent;box-shadow:none;
-  animation:none;}
-.kpi-card.ghost::before{display:none;}
-.kpi-card.ghost:hover{transform:none;box-shadow:none;border-color:transparent;}
-.kpi-label{font-size:.8rem;color:var(--muted);margin-bottom:8px;font-weight:600;
-  position:relative;z-index:1;}
-.kpi-value{font-size:2.15rem;font-weight:800;color:var(--text);line-height:1.02;
-  font-variant-numeric:tabular-nums;position:relative;z-index:1;}
-.kpi-card.total .kpi-value{font-size:2.7rem;color:#48e0aa;
-  text-shadow:0 0 20px rgba(64,214,160,.24);}
-.kpi-unit{font-size:.95rem;font-weight:600;color:var(--muted);margin-left:5px;}
-.kpi-sub{font-size:.74rem;color:var(--muted);margin-top:9px;position:relative;z-index:1;}
-.kpi-op{display:flex;align-items:center;font-size:1.6rem;color:#5b6b7d;font-weight:800;}
-@keyframes kpiIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
-
-/* ---------- 치수 뱃지 ---------- */
-.badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:-2px 0 12px;}
-.badge{background:#1c2432;border:1px solid #2a3140;border-radius:9px;
-  padding:5px 12px;font-size:.84rem;color:#9fb0c0;letter-spacing:.01em;}
-.badge b{color:#eaf2fb;font-weight:700;font-variant-numeric:tabular-nums;}
-.badge.g{border-color:rgba(64,214,160,.35);}
-.badge.g b{color:#48e0aa;}
-.badge.unit{background:transparent;border:none;color:#6b7684;padding-left:2px;}
-
-/* ---------- 슬라이더 에메랄드(#10b981) 통일 ---------- */
-/* 핸들(둥근 조절점) */
-[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"]{
-  background-color:#10b981 !important;
-  box-shadow:0 0 0 4px rgba(16,185,129,.22) !important;}
-/* 채워진 활성 트랙 — 파란 그라데이션을 에메랄드 단색으로 직접 덮어씀 */
-[data-testid="stSlider"] [data-baseweb="slider"] > div:nth-child(1) > div:nth-child(1) > div:nth-child(2){
-  background:#10b981 !important;background-image:none !important;}
-/* 현재값 라벨 */
-[data-testid="stSlider"] [data-testid="stThumbValue"]{color:#10b981 !important;font-weight:700;}
-
-/* ---------- 배치도 (Plotly 컨테이너 + 수치 카드) ---------- */
-[data-testid="stPlotlyChart"]{border:1px solid var(--border);border-radius:16px;
-  overflow:hidden;background:linear-gradient(160deg,#161b22,#12161d);padding:2px;
-  box-shadow:0 12px 32px -18px rgba(0,0,0,.75);}
-.stat{background:linear-gradient(160deg,#1a2029,#141922);border:1px solid #2a3140;
-  border-radius:13px;padding:13px 16px;margin-bottom:12px;position:relative;overflow:hidden;
-  box-shadow:0 6px 18px -12px rgba(0,0,0,.6);}
-.stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);}
-.stat .l{font-size:.74rem;color:var(--muted);margin-bottom:5px;font-weight:600;}
-.stat .v{font-size:1.5rem;font-weight:800;color:var(--text);
-  font-variant-numeric:tabular-nums;line-height:1.05;}
-.stat .u{font-size:.8rem;color:var(--muted);font-weight:600;margin-left:4px;}
-.stat.hi{background:linear-gradient(160deg,rgba(25,158,112,.10),#141922 66%);
-  border:1px solid rgba(64,214,160,.22);
-  box-shadow:0 6px 18px -12px rgba(0,0,0,.6);}
-.stat.hi::before{background:linear-gradient(180deg,#40d6a0,#199e70);}
-.stat.hi .v{color:#5fd6a6;}
-/* 우측 수치카드 2개를 3D 차트 높이에 맞춰 세로로 꽉 채움(비대칭 여백 제거) */
-.statcol{display:flex;flex-direction:column;gap:14px;min-height:430px;}
-.statcol .stat{flex:1;margin-bottom:0;display:flex;flex-direction:column;
-  justify-content:center;padding:18px 22px;}
-.statcol .stat .v{font-size:2.15rem;}
-.statcol .stat.hi .v{font-size:2.35rem;}
-.statcol .stat .l{font-size:.82rem;margin-bottom:7px;}
-
-/* ---------- 라디오 → 세그먼트 컨트롤(연결된 토글 버튼) ---------- */
-div[role="radiogroup"]{gap:3px;background:var(--surface2);
+/* ---------- 라디오 → 세그먼트 버튼 (화면 전환용) ---------- */
+div[role="radiogroup"]{gap:3px;background:var(--surface);
   border:1px solid var(--border);border-radius:12px;padding:4px;margin-bottom:1rem;}
 [data-testid="stMain"] div[role="radiogroup"]{display:inline-flex;flex-wrap:wrap;}
 section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;}
 div[role="radiogroup"] > label{background:transparent;border:none;border-radius:9px;
   padding:8px 16px;margin:0;cursor:pointer;color:var(--muted);font-weight:600;
   font-size:.9rem;text-align:center;transition:background .15s,color .15s;}
-div[role="radiogroup"] > label:hover{background:rgba(255,255,255,.045);color:var(--text);}
-div[role="radiogroup"] > label > div:first-child{display:none;}   /* 라디오 동그라미 숨김 */
-div[role="radiogroup"] > label:has(input:checked){
-  background:linear-gradient(180deg,#2b3646,#222b38);color:#eaf2fb;
-  box-shadow:0 1px 2px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);}
-
-/* ---------- 견적 유도 CTA ---------- */
-.cta{display:flex;align-items:center;justify-content:space-between;gap:14px;
-  margin:.2rem 0 .3rem;padding:16px 20px;border-radius:14px;
-  background:linear-gradient(100deg,rgba(57,135,229,.16),rgba(25,158,112,.10));
-  border:1px solid #2f4560;transition:border-color .16s;}
-.cta:hover{border-color:#3d6ea0;}
-.cta .t{color:var(--text);font-weight:700;font-size:.98rem;}
-.cta .d{color:var(--muted);font-size:.8rem;margin-top:3px;}
-.cta .go{white-space:nowrap;background:linear-gradient(135deg,#3987e5,#2a6fc4);
-  color:#fff;font-weight:700;font-size:.9rem;padding:10px 18px;border-radius:10px;
-  box-shadow:0 6px 18px -6px rgba(57,135,229,.7);}
-
-/* ---------- 기록 저장 카드(폼) ---------- */
-[data-testid="stForm"]{border:1px solid var(--border) !important;border-radius:16px;
-  background:linear-gradient(180deg,#161b23,#12161d);
-  padding:22px 24px 18px !important;box-shadow:0 10px 30px -18px rgba(0,0,0,.7);}
-[data-testid="stForm"] [data-testid="stHorizontalBlock"]{gap:1.4rem;}
-[data-testid="stForm"] [data-testid="stVerticalBlock"]{gap:.9rem;}
-[data-testid="stForm"] label p{font-size:.82rem !important;color:var(--muted) !important;
-  font-weight:600;}
-[data-testid="stForm"] textarea{background:var(--surface2) !important;
-  border-radius:10px !important;}
+div[role="radiogroup"] > label:hover{background:rgba(255,255,255,.045);}
+div[role="radiogroup"] > label > div:first-child{display:none;}
+div[role="radiogroup"] > label:has(input:checked){background:#222b38;color:#eaf2fb;}
 </style>
 """, unsafe_allow_html=True)
 
 
 def kpi_row(cards):
-    """KPI 카드 한 줄 렌더링. cards: [{label,value,unit,sub,variant,op}]"""
-    html = ['<div class="kpi-row">']
-    for c in cards:
-        if c.get("op"):
-            html.append(f'<div class="kpi-op">{c["op"]}</div>')
-        _style = f' style="flex:{c["w"]}"' if c.get("w") else ""
-        html.append(
-            f'<div class="kpi-card {c.get("variant","")}"{_style}>'
-            f'<div class="kpi-label">{c["label"]}</div>'
-            f'<div class="kpi-value">{c["value"]}'
-            f'<span class="kpi-unit">{c.get("unit","")}</span></div>'
-            f'<div class="kpi-sub">{c.get("sub","")}</div></div>'
-        )
-    html.append('</div>')
-    st.markdown("".join(html), unsafe_allow_html=True)
+    """숫자 요약을 st.metric 카드로 한 줄 표시. cards: [{label,value,unit,sub}]"""
+    cards = [c for c in cards if c.get("label")]
+    if not cards:
+        return
+    cols = st.columns(len(cards))
+    for col, c in zip(cols, cards):
+        value = f'{c["value"]}{c.get("unit","")}'.strip()
+        sub = c.get("sub") or None
+        if sub:
+            sub = sub.replace("*", "×")   # 말풍선(help)은 마크다운 렌더링 → * 이탤릭 방지
+        col.metric(c["label"], value, help=sub)
 
 
 def section(title):
-    st.markdown(f'<div class="sec"><span class="dot"></span>{title}</div>',
-                unsafe_allow_html=True)
+    st.subheader(title)
 
 
 _CUBE_FACES = [(0, 1, 2), (0, 2, 3), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4),
@@ -403,12 +243,6 @@ def mesh_preview_fig(geom):
     return fig
 
 
-def stat_card(label, value, unit="", hi=False):
-    return (f'<div class="stat {"hi" if hi else ""}">'
-            f'<div class="l">{label}</div>'
-            f'<div class="v">{value}<span class="u">{unit}</span></div></div>')
-
-
 # ---------------------------------------------------------------------------
 # 헤더
 # ---------------------------------------------------------------------------
@@ -419,8 +253,7 @@ st.caption("포장 사양 입력 → 적재 효율 자동 계산 → 구매팀 �
 # 사이드바 - 입력
 # ---------------------------------------------------------------------------
 def sidebar_step(n, title):
-    st.markdown(f'<div class="step"><span class="num">{n}</span>{title}</div>',
-                unsafe_allow_html=True)
+    st.markdown(f"**{n}. {title}**")
 
 
 with st.sidebar:
@@ -444,7 +277,7 @@ with st.sidebar:
                            f"**{_hit.get('carton','?')}** · 박스당 **{_hit.get('qty','?')}개**\n\n"
                            f"박스규격 {_hit.get('L')}×{_hit.get('W')}×{_hit.get('H')} mm "
                            f"(※ 양산 엑셀엔 제품 치수가 없어 박스 규격만 제공)")
-                if st.button("📌 이 부품 양산정보 표시", use_container_width=True):
+                if st.button("📌 이 부품 양산정보 표시", width="stretch"):
                     st.session_state["part_name"] = _hit.get("item", "") or _code
                     st.session_state["_answer"] = {"code": _code, **_hit}
                     st.rerun()
@@ -596,7 +429,7 @@ with st.sidebar:
                                    "입수(개)": c if c > 0 else "안 들어감",
                                    "선택": "✅" if n == _chosen["박스명"] else ""}
                                   for n, s, c in _caps]),
-                    hide_index=True, use_container_width=True)
+                    hide_index=True, width="stretch")
 
             _override = st.checkbox("입수 직접 지정", value=False,
                                     help="추천값 대신 원하는 입수를 직접 넣습니다.")
@@ -758,13 +591,7 @@ if view == VIEWS[0]:
 
         # 적재 배치도 (좌: Plotly 시각화 / 우: 수치 카드)
         section(f"적재 배치도 · {sel_row['박스명']}")
-        st.markdown(
-            '<div class="badges">'
-            f'<span class="badge">가로 <b>{_bl:g}</b></span>'
-            f'<span class="badge">세로 <b>{_bw:g}</b></span>'
-            f'<span class="badge g">높이 <b>{_bh:g}</b></span>'
-            '<span class="badge unit">mm</span>'
-            '</div>', unsafe_allow_html=True)
+        st.caption(f"가로 **{_bl:g}** · 세로 **{_bw:g}** · 높이 **{_bh:g}** (mm)")
 
         # ④ 충진율 · ⑤ 적재 안정성 배지
         if _total > 0 and _bl and _bw and _bh:
@@ -775,11 +602,7 @@ if view == VIEWS[0]:
             _fill = min(_unit_cc * _total / _box_cc * 100, 100) if _box_cc else 0
             _real = "실측(STL)" if (_mg0 and _mg0.get("volume")) else "외경 기준"
             _tip = "형상 손실 여유 있음" if _fill < 78 else "빈틈 거의 없음"
-            st.markdown(
-                '<div class="badges">'
-                f'<span class="badge">충진율 <b>{_fill:.0f}%</b></span>'
-                f'<span class="badge unit">{_real} · {_tip}</span>'
-                '</div>', unsafe_allow_html=True)
+            st.caption(f"충진율 **{_fill:.0f}%** · {_real} · {_tip}")
             _warns = []
             if unit_weight_g:
                 _bw_kg = _total * unit_weight_g / 1000.0
@@ -797,16 +620,13 @@ if view == VIEWS[0]:
                 mp, mc = st.columns([2, 1], gap="large")
                 with mp:
                     st.plotly_chart(mesh_preview_fig(_mg),
-                                    use_container_width=True,
+                                    width="stretch",
                                     config={"displayModeBar": False})
                 _L, _W, _H = _mg["dims"]
                 _vol_cc = round(_mg["volume"] / 1000, 1) if _mg.get("volume") else 0
                 with mc:
-                    st.markdown(
-                        stat_card("측정 L×W×H", f"{_L}×{_W}×{_H}", "mm", hi=True)
-                        + stat_card("부피", f"{_vol_cc:g}" if _vol_cc else "-",
-                                    "cm³" if _vol_cc else ""),
-                        unsafe_allow_html=True)
+                    st.metric("측정 L×W×H", f"{_L}×{_W}×{_H} mm")
+                    st.metric("부피", f"{_vol_cc:g} cm³" if _vol_cc else "-")
                     st.caption("제품 좌표축 기준(NX 측정값과 동일) · 3D 파일에서 자동 측정")
         viz, stt = st.columns([2, 1], gap="large")
         with viz:
@@ -828,40 +648,28 @@ if view == VIEWS[0]:
                     packing_fig_3d(_c, _r, _disp_layers, active_layers=sel,
                                    top_count=_top_cnt,
                                    box_l=_bl, box_w=_bw, box_h=_bh),
-                    use_container_width=True, config={"displayModeBar": False})
+                    width="stretch", config={"displayModeBar": False})
                 _grid_trunc = _c > 8 or _r > 8      # 바닥 격자만 8×8로 축약
                 _layer_trunc = _eff_layers > _ZCAP  # 층수가 상한 초과 시에만
                 _partial = _top_cnt < _per_layer
                 cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개까지 가능하지만 "
                             f"'{sel_row['제한 요인']}'으로 {_total:,}개에서 적재를 멈춥니다") if _capped else ""
-                partial_note = (f"  ·  맨 위 {sel}층은 자투리 <b>{_top_cnt}개</b>만 적재"
+                partial_note = (f"  ·  맨 위 {sel}층은 자투리 **{_top_cnt}개**만 적재"
                                 if _partial else "")
                 grid_note = "  ·  바닥 격자가 커서 그림은 8×8로 축약" if _grid_trunc else ""
                 layer_note = (f"  ·  {_eff_layers}층 중 {_ZCAP}층까지만 그림 표시"
                               if _layer_trunc else "")
-                st.markdown(
-                    f'<div style="font-size:12.5px;color:#8b98a5;margin-top:2px;">'
-                    f'🧊 {_c}×{_r} 격자 × {_eff_layers}층'
-                    f'{partial_note}{grid_note}{layer_note}{cap_note}</div>',
-                    unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="cta" style="margin-top:4px;padding:13px 18px;">'
-                    f'<div><div class="t">📐 1층 ~ {sel}층 누적</div>'
-                    f'<div class="d">예상 높이 <b style="color:#7ec8f3;">{cum_h:,} mm</b>'
-                    f' / 박스 {_bh:g}mm &nbsp;·&nbsp; 누적 수량 '
-                    f'<b style="color:#40d6a0;">{cum_qty:,} 개</b></div></div></div>',
-                    unsafe_allow_html=True)
+                st.caption(f"🧊 {_c}×{_r} 격자 × {_eff_layers}층"
+                          f"{partial_note}{grid_note}{layer_note}{cap_note}")
+                mcol1, mcol2 = st.columns(2)
+                mcol1.metric(f"1층~{sel}층 예상 높이", f"{cum_h:,} / {_bh:g} mm")
+                mcol2.metric("누적 수량", f"{cum_qty:,} 개")
             else:
                 st.info("이 조합은 적재되지 않습니다.")
         with stt:
             # 상단 '추천 박스'·배지줄과 중복되는 카드는 빼고, 배치도를 설명하는 2개만
-            # .statcol 로 감싸 3D 차트 높이에 맞춰 세로로 꽉 채움
-            st.markdown(
-                '<div class="statcol">'
-                + stat_card(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}", _u, hi=True)
-                + stat_card("총 적층 단수", f"{_eff_layers:,}", "층")
-                + '</div>',
-                unsafe_allow_html=True)
+            st.metric(f"층당 개수 ({_c}×{_r})", f"{_per_layer:,}{_u}")
+            st.metric("총 적층 단수", f"{_eff_layers:,}층")
         st.markdown("")
 
         # 🚚 물류 적재 (파렛트 · 컨테이너) — 보조 정보라 기본 접힘
@@ -910,7 +718,7 @@ if view == VIEWS[0]:
                                          help="구매팀이 회신한 확정 단가. 저장하면 다음부터 자동 반영.")
             pack_price = oc2.number_input("포장재 단가/박스 (원)", min_value=0.0, value=0.0, step=10.0)
             box_self_g = oc3.number_input("박스 자체 무게 (g)", min_value=0.0, value=0.0, step=10.0)
-            if st.button(f"💾 '{sel_row['박스명']}' 확정 단가 저장", use_container_width=True,
+            if st.button(f"💾 '{sel_row['박스명']}' 확정 단가 저장", width="stretch",
                          disabled=not box_price):
                 store.save_price(sel_row["박스명"], box_price,
                                  datetime.now().strftime("%Y-%m-%d %H:%M"))
@@ -938,7 +746,7 @@ if view == VIEWS[0]:
         with st.expander(f"📦 다른 박스 규격 및 적재량 비교하기  ({len(rows)}종) · "
                          "행을 클릭하면 그 박스로 선택됩니다 ▾", expanded=False):
             _ev = st.dataframe(
-                df[show_cols], use_container_width=True, hide_index=True,
+                df[show_cols], width="stretch", hide_index=True,
                 on_select="rerun", selection_mode="single-row", key="cmp_table",
                 column_config={
                     "박스당 총 제품": st.column_config.NumberColumn(format="%d 개"),
@@ -973,7 +781,7 @@ if view == VIEWS[0]:
                     xaxis=dict(type="category", showgrid=False, zeroline=False,
                                showline=False, ticks="", color="#8b98a5",
                                tickfont=dict(size=10.5)))
-                st.plotly_chart(_cfig, use_container_width=True,
+                st.plotly_chart(_cfig, width="stretch",
                                 config={"displayModeBar": False})
 
         # 기록 저장 (추천 vs 실제 적용)
@@ -995,7 +803,7 @@ if view == VIEWS[0]:
             memo = st.text_area("현실화 메모 / 비고", value="", height=84,
                                 placeholder="예: 추천은 55-2였으나 재고 문제로 T-10 적용")
             _saved = st.form_submit_button("💾 기록 저장", type="primary",
-                                           use_container_width=True)
+                                           width="stretch")
         if _saved:
             if not (customer or part_name):
                 st.warning("고객사 또는 품명을 입력한 뒤 저장하세요.")
@@ -1017,7 +825,7 @@ if view == VIEWS[0]:
 
         st.markdown("")
         st.button("📄 구매팀 견적 양식 만들기  (Excel · PDF)  →", type="primary",
-                  use_container_width=True,
+                  width="stretch",
                   on_click=lambda: st.session_state.update(active_view=VIEWS[1]))
         with st.expander("ℹ️ 계산 방식 보기"):
             st.markdown(
@@ -1038,13 +846,13 @@ elif view == VIEWS[1]:
         unit_weight_g=unit_weight_g, inner_mode=inner_mode, bag_name=bag_name,
         sel_box=_sb, sel_size=_ss, sel_qty=_sq, tray_info=tray_info)
 
-    # 메타 정보를 칩으로
-    chips = "".join(f'<span class="chip"><b>{k}</b> {v}</span>'
-                    for k, v in header_info.items())
-    st.markdown(f'<div class="ctxbar">{chips}</div>', unsafe_allow_html=True)
+    # 메타 정보 요약 (마크다운 * 이탤릭 방지를 위해 화면 표시용으로만 × 로 치환)
+    st.caption(" · ".join(f"**{k}** {str(v).replace('*', '×')}"
+                         for k, v in header_info.items()))
 
     if sel_row:
-        st.success(f"📦 선택 박스 **{_sb}** ({_ss}) · 박스당 **{_sq:,}개** 기준으로 견적을 만듭니다.")
+        st.success(f"📦 선택 박스 **{_sb}** ({_ss.replace('*', '×')}) · "
+                   f"박스당 **{_sq:,}개** 기준으로 견적을 만듭니다.")
     scope = st.radio("견적 범위", ["선택 박스만", "전체 박스 비교"], horizontal=True,
                      help="기본은 선택한 박스 1종. 여러 박스 단가를 한 번에 받으려면 '전체'.")
     quote_source = [sel_row] if (scope == "선택 박스만" and sel_row) else rows
@@ -1080,7 +888,7 @@ elif view == VIEWS[1]:
             columns=["_cols", "_rows", "_layers", "_unit"], errors="ignore")
         edited = st.data_editor(
             editable,
-            use_container_width=True, hide_index=True, num_rows="fixed",
+            width="stretch", hide_index=True, num_rows="fixed",
             column_config={
                 "구매 확정 단가": st.column_config.NumberColumn(
                     "구매 확정 단가 ✍️",
@@ -1100,7 +908,7 @@ elif view == VIEWS[1]:
                                     chart_png=chart_png, bilingual=bilingual),
                 file_name=f'견적요청서_{outer_group}.xlsx',
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
+                width="stretch",
             )
         with d2:
             st.download_button(
@@ -1109,14 +917,13 @@ elif view == VIEWS[1]:
                                   chart_png=chart_png, bilingual=bilingual),
                 file_name=f'견적요청서_{outer_group}.pdf',
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
             )
 
 # --- 탭3: 기록 관리 ---
 elif view == VIEWS[2]:
     section("📚 기록 관리")
     hist = store.load_df()
-
     if hist.empty:
         st.info("아직 저장된 기록이 없습니다. '📊 적재 효율 계산'에서 "
                 "'💾 기록 저장'을 눌러 첫 기록을 남겨보세요.")
@@ -1140,7 +947,7 @@ elif view == VIEWS[2]:
                 st.caption("📦 가장 많이 쓴 실제 박스 Top5")
                 if not _topbox.empty:
                     st.dataframe(_topbox.rename_axis("박스").reset_index(name="건수"),
-                                 use_container_width=True, hide_index=True)
+                                 width="stretch", hide_index=True)
                 else:
                     st.caption("데이터 없음")
         if "고객사" in hist.columns:
@@ -1150,7 +957,7 @@ elif view == VIEWS[2]:
                 st.caption("🏢 고객사별 건수 Top5")
                 if not _topcust.empty:
                     st.dataframe(_topcust.rename_axis("고객사").reset_index(name="건수"),
-                                 use_container_width=True, hide_index=True)
+                                 width="stretch", hide_index=True)
                 else:
                     st.caption("데이터 없음")
 
@@ -1159,7 +966,7 @@ elif view == VIEWS[2]:
         section(f"🔍 현재 제품({pl:g}×{pw:g}×{ph:g})과 비슷한 사이즈")
         if sim is not None and not sim.empty:
             st.caption(f"±15%(최소 5mm) 이내 재원 기록 {len(sim)}건 · 추천 ↔ 실제 적용 비교")
-            st.dataframe(sim, use_container_width=True, hide_index=True)
+            st.dataframe(sim, width="stretch", hide_index=True)
         else:
             st.caption("비슷한 사이즈의 과거 기록이 없습니다.")
 
@@ -1168,7 +975,7 @@ elif view == VIEWS[2]:
         cmp_cols = ["저장일시", "고객사", "제품명", "추천 포장재", "추천 박스",
                     "추천 수량", "실제 포장재", "실제 박스", "실제 수량", "일치"]
         cmp_cols = [c for c in cmp_cols if c in hist.columns]
-        st.dataframe(hist[cmp_cols][::-1], use_container_width=True, hide_index=True)
+        st.dataframe(hist[cmp_cols][::-1], width="stretch", hide_index=True)
 
         section("전체 기록 (제작정보 포함)")
         kw = st.text_input("검색 (고객사·제품명·박스·업체)", value="",
@@ -1178,7 +985,7 @@ elif view == VIEWS[2]:
             m = hist.apply(lambda r: kw.lower() in
                            " ".join(str(v) for v in r.values).lower(), axis=1)
             shown = hist[m]
-        st.dataframe(shown[::-1], use_container_width=True, hide_index=True)
+        st.dataframe(shown[::-1], width="stretch", hide_index=True)
         st.caption(f"총 {len(hist)}건 저장됨 · {len(shown)}건 표시")
 
     st.markdown("")
@@ -1189,7 +996,7 @@ elif view == VIEWS[2]:
     b1.download_button("⬇️ 전체 기록 내려받기 (CSV)",
                        data=hist.to_csv(index=False).encode("utf-8-sig"),
                        file_name="포장기록.csv", mime="text/csv",
-                       use_container_width=True, disabled=hist.empty)
+                       width="stretch", disabled=hist.empty)
     up = b2.file_uploader("⬆️ CSV 올려 복원/병합", type=["csv"],
                           label_visibility="collapsed")
     if up is not None:
@@ -1212,7 +1019,7 @@ else:
 
     tab_view, tab_edit = st.tabs(["📋 열람", "✏️ 편집 · 내보내기"])
     with tab_view:
-        st.dataframe(_base_df, use_container_width=True, hide_index=True)
+        st.dataframe(_base_df, width="stretch", hide_index=True)
 
     with tab_edit:
         st.caption("화면에서 박스를 추가·수정·삭제한 뒤 **CSV로 내보내** 보관하거나, "
@@ -1223,12 +1030,12 @@ else:
         _ed_src = _base_df.reindex(columns=[c for c in _editcols if c in _base_df.columns]
                                    or _base_df.columns)
         edited_cat = st.data_editor(
-            _ed_src, use_container_width=True, hide_index=True, num_rows="dynamic",
+            _ed_src, width="stretch", hide_index=True, num_rows="dynamic",
             key=f"cat_edit_{_grp}")
         c_dl1, c_dl2 = st.columns(2)
         c_dl1.download_button(
             "⬇️ 이 분류 CSV 내보내기", data=edited_cat.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"catalog_{_grp}.csv", mime="text/csv", use_container_width=True)
+            file_name=f"catalog_{_grp}.csv", mime="text/csv", width="stretch")
 
         def _to_py(df):
             lines = [f"# {_grp} — 편집본 (data.py의 _box() 리스트에 반영)", "EDITED_BOXES = ["]
@@ -1242,8 +1049,8 @@ else:
             return "\n".join(lines) + "\n"
         c_dl2.download_button(
             "⬇️ data.py 형식(.py) 내보내기", data=_to_py(edited_cat).encode("utf-8"),
-            file_name=f"catalog_{_grp}.py", mime="text/x-python", use_container_width=True)
-        if st.button("↩️ 이번 세션에만 적용(미리보기)", use_container_width=True):
+            file_name=f"catalog_{_grp}.py", mime="text/x-python", width="stretch")
+        if st.button("↩️ 이번 세션에만 적용(미리보기)", width="stretch"):
             st.session_state[f"catalog_override_{_grp}"] = True
             st.info("편집 내용은 CSV/py로 내보내야 영구 반영됩니다. "
                     "실제 계산 반영은 `data.py` 수정 후 업로드하세요.")
