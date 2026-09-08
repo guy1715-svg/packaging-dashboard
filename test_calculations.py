@@ -128,3 +128,40 @@ def test_rows_bag_self_consistent():
     rows = build_packaging_rows((50, 30, 15), BOXES, inner_mode="지퍼백",
                                 bag_count=12, bag_l=60, bag_w=90, bag_h=45)
     assert rows[0]["박스당 총 제품"] == 12 * m
+
+
+# --- 층수/층당 제품수 (지퍼백·트레이는 봉지/트레이 1개에 제품이 여러 개 --------
+# 들어가므로, _layers/_cols/_rows(봉지·트레이 단위)를 그대로 제품 수 계산에
+# 쓰면 층수가 수백 배 부풀려지고 적층 높이가 박스 높이를 훨씬 초과한다.
+# (실사용 중 발견된 버그의 회귀 테스트: 지퍼백 168개입 · 55-2 박스 조합에서
+#  '25층 예상 높이 3,433 / 412mm' 처럼 박스 높이를 8배 넘는 값이 나왔었다.)
+def test_rows_bag_layer_fields_use_real_product_counts():
+    box = {"박스명": "55-2", "size": "410*345*412",
+           "inner_l": 410, "inner_w": 345, "inner_h": 412, "비고": ""}
+    rows = build_packaging_rows((17.0, 14.5, 7.8), [box], inner_mode="지퍼백",
+                                bag_count=168, bag_l=120, bag_w=170, bag_h=17.0)
+    r = rows[0]
+    assert r["박스당 총 제품"] == 24192
+    assert (r["_cols"], r["_rows"], r["_layers"]) == (24, 2, 3)   # 봉지 기준 3D 격자
+    assert r["_total_layers"] == 3                                # 실제 적층 단수
+    assert r["_products_per_layer"] == 8064                       # 24×2×168개입
+    # 층 수 × 층당 제품 수 = 총 제품 수와 정확히 맞아야 한다(부피 기준 최대일 때).
+    assert r["_products_per_layer"] * r["_total_layers"] == r["박스당 총 제품"]
+    # 층 1개 높이 × 총 층수 ≤ 박스 내부 높이 (박스보다 높게 쌓일 수는 없음).
+    layer_h = box["inner_h"] / r["_layers"]
+    assert round(layer_h * r["_total_layers"]) <= box["inner_h"]
+
+
+def test_rows_tray_layer_fields_use_real_stack_count():
+    box = {"박스명": "B", "size": "500*300*370",
+           "inner_l": 500, "inner_w": 300, "inner_h": 370, "비고": ""}
+    rows = build_packaging_rows((50, 30, 15), [box], inner_mode="범용트레이",
+                                tray_cells=48, tray_grid=(6, 8),
+                                tray_l=200, tray_w=140, tray_thickness=30)
+    r = rows[0]
+    # trays_per_box(200,140,30,box) == (48, 4, 12): 총 트레이 48장 = 바닥 4장 × 12단.
+    # _layers 는 '총 트레이수(48)'가 아니라 '실제 적층 단수(12)'여야 한다.
+    assert r["_layers"] == 12
+    assert r["_total_layers"] == 12
+    assert r["_products_per_layer"] == 48 * 4                     # 트레이 칸수 × 바닥 트레이수
+    assert r["_products_per_layer"] * r["_total_layers"] == r["박스당 총 제품"]

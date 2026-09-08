@@ -172,7 +172,12 @@ def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
 
     safety_pct : 적재 여유율(%). 이론 수량에서 그만큼 감산.
     weight_limit_kg : 박스당 총중량 한도(기본 10kg). 초과 시 수량 제한.
-    각 행에 그리기용 필드(_cols/_rows/_layers/_unit)를 포함합니다.
+    각 행에 그리기용 필드(_cols/_rows/_layers/_unit)와, 실제 제품 개수 기준
+    층당 수량·총 층수(_products_per_layer/_total_layers)를 포함합니다.
+    _layers/_cols/_rows 는 포장 단위(봉지·트레이 등) 기준 그림용 값이라
+    지퍼백/트레이처럼 1개 단위에 제품이 여러 개 들어가는 경우 그대로 제품
+    수량 계산에 쓰면 안 되므로, 층/적층 관련 표시는 반드시
+    _products_per_layer · _total_layers 를 사용해야 합니다.
     """
     is_tray = "트레이" in inner_mode
     is_bag = "지퍼백" in inner_mode
@@ -184,13 +189,19 @@ def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
                 tray_l, tray_w, tray_thickness, box, wall_margin=wall_margin)
             base_total = tray_cells * m_per_box
             method = f"트레이 {tray_cells}칸 × {m_per_box}장 (바닥{base_cnt}×{layers}단)"
-            dcols, drows, dlayers, dunit = tray_grid[0], tray_grid[1], m_per_box, "칸"
+            # _layers 는 '실제 적층 단수'(layers) — 총 트레이수(m_per_box)를 넣으면
+            # 박스 내부 높이 대비 층수·층당 개수 계산이 어긋난다.
+            dcols, drows, dlayers, dunit = tray_grid[0], tray_grid[1], layers, "칸"
+            products_per_layer = tray_cells * base_cnt
+            total_layers = layers
         elif is_bag:
             m_per_box, grid, _ = loading_qty_best_orientation(
                 (bag_l, bag_w, bag_h), b, lock_height=lock_height)
             base_total = bag_count * m_per_box
             method = f"{bag_count}개입 지퍼백 × {m_per_box}봉 (3D {grid[0]}×{grid[1]}×{grid[2]})"
             dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "봉"
+            products_per_layer = grid[0] * grid[1] * bag_count
+            total_layers = grid[2]
         else:
             if use_best:
                 qty, grid, _ = loading_qty_best_orientation(
@@ -200,6 +211,8 @@ def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
             base_total = qty
             method = f"벌크 3D {grid[0]}×{grid[1]}×{grid[2]}"
             dcols, drows, dlayers, dunit = grid[0], grid[1], grid[2], "개"
+            products_per_layer = grid[0] * grid[1]
+            total_layers = grid[2]
 
         # 적재 여유율(안전계수) 적용
         if safety_pct > 0:
@@ -231,5 +244,6 @@ def build_packaging_rows(product, outer_boxes, *, inner_mode, outer_group="",
             "비고": box.get("비고", ""),
             "구매 확정 단가": None,
             "_cols": dcols, "_rows": drows, "_layers": dlayers, "_unit": dunit,
+            "_products_per_layer": products_per_layer, "_total_layers": total_layers,
         })
     return rows

@@ -596,10 +596,18 @@ if view == VIEWS[0]:
         _c, _r = int(sel_row["_cols"]), int(sel_row["_rows"])
         _lay, _u = int(sel_row["_layers"]), sel_row["_unit"]
         _total = sel_row["박스당 총 제품"]
-        _per_layer = _c * _r
-        _geom = _per_layer * _lay                       # 부피 기준 최대
-        _capped = _per_layer > 0 and _total < _geom     # 무게 한도 등으로 줄었는지
-        _eff_layers = -(-_total // _per_layer) if _per_layer > 0 else 0
+        _per_layer = _c * _r                             # 그림/표시용 (봉지·트레이·개 단위)
+        # 지퍼백·트레이는 1단위(봉지·트레이)에 제품이 여러 개 들어가므로
+        # 층수·누적수량 계산은 반드시 '제품 개수' 기준(_products_per_layer)으로 해야 한다.
+        # (봉지/트레이 단위(_per_layer)를 그대로 쓰면 층수가 수백 배로 부풀려지고
+        #  1개 층 높이가 박스 내부 높이를 훨씬 초과하는 값이 나온다.)
+        _prod_per_layer = int(sel_row.get("_products_per_layer") or _per_layer) or 1
+        # 봉지/트레이 1개에 들어가는 제품 수(예: 지퍼백 168개입 → 168). 그림은 봉지/
+        # 트레이 단위(_per_layer)로 그리므로, 그림의 '맨 위 층 자투리' 계산에 필요.
+        _unit_per_container = round(_prod_per_layer / _per_layer) if _per_layer else 1
+        _geom = _prod_per_layer * _lay                   # 부피 기준 최대 (제품 개수)
+        _capped = _prod_per_layer > 0 and _total < _geom  # 무게 한도 등으로 줄었는지
+        _eff_layers = -(-_total // _prod_per_layer) if _prod_per_layer > 0 else 0
         # 선택 박스 실제 치수(mm)
         _pbox = next((b for b in outer_boxes if b["박스명"] == sel_row["박스명"]), None)
         _bl, _bw, _bh = (_pbox["inner_l"], _pbox["inner_w"], _pbox["inner_h"]) \
@@ -657,10 +665,15 @@ if view == VIEWS[0]:
                                 help="1층부터 선택한 층까지 채워 표시 · 맨 위 층 초록 강조 · "
                                      "드래그 회전 / 스크롤 확대")
             if _c > 0 and _r > 0:
-                cum_qty = min(_per_layer * sel, _total)
+                # 실제로 사용된 봉지/트레이 수(무게·여유율로 제품 수가 줄면 마지막
+                # 몇 개는 아예 안 쓰일 수 있음) — 그림(봉지/트레이 단위) 자투리 계산용.
+                _used_containers = -(-_total // _unit_per_container) \
+                    if _unit_per_container > 0 else 0
+                cum_qty = min(_prod_per_layer * sel, _total)          # 제품 개수 기준
                 cum_h = round(sel * _layer_h)
-                # 선택한 맨 위(sel) 층에 실제로 놓이는 블록 수 (자투리 층이면 < 층당개수)
-                _top_cnt = cum_qty - _per_layer * (sel - 1)
+                # 선택한 맨 위(sel) 층에 실제로 놓이는 봉지/트레이 수 (자투리 층이면 < 층당개수)
+                _cum_containers = min(_per_layer * sel, _used_containers)
+                _top_cnt = _cum_containers - _per_layer * (sel - 1)
                 st.plotly_chart(
                     packing_fig_3d(_c, _r, _disp_layers, active_layers=sel,
                                    top_count=_top_cnt,
@@ -671,7 +684,7 @@ if view == VIEWS[0]:
                 _partial = _top_cnt < _per_layer
                 cap_note = (f"  ·  ⚠️ 부피상 {_geom:,}개까지 가능하지만 "
                             f"'{sel_row['제한 요인']}'으로 {_total:,}개에서 적재를 멈춥니다") if _capped else ""
-                partial_note = (f"  ·  맨 위 {sel}층은 자투리 **{_top_cnt}개**만 적재"
+                partial_note = (f"  ·  맨 위 {sel}층은 자투리 **{_top_cnt}{_u}**만 적재"
                                 if _partial else "")
                 grid_note = "  ·  바닥 격자가 커서 그림은 8×8로 축약" if _grid_trunc else ""
                 layer_note = (f"  ·  {_eff_layers}층 중 {_ZCAP}층까지만 그림 표시"
@@ -749,8 +762,13 @@ if view == VIEWS[0]:
                 {"label": "박스 출하 총중량", "value": f"{_ship_kg:,.2f}", "unit": "kg",
                  "sub": "제품 무게 합 + 박스 자체 무게"},
             ])
+            if box_price == 0 and pack_price == 0:
+                st.caption("💡 박스 단가·포장재 단가를 입력해야 포장원가가 계산됩니다 "
+                           "(0원은 '미입력'을 뜻하며 실제 원가가 아닙니다).")
 
-        df = pd.DataFrame(rows).drop(columns=["_cols", "_rows", "_layers", "_unit"])
+        df = pd.DataFrame(rows).drop(
+            columns=["_cols", "_rows", "_layers", "_unit",
+                     "_products_per_layer", "_total_layers"])
         _mx = df["박스당 총 제품"].max()
         df.insert(0, "선택", df["박스명"].apply(
             lambda n: "✅" if n == sel_row["박스명"] else ""))
@@ -902,7 +920,8 @@ elif view == VIEWS[1]:
         st.warning("표시할 항목이 없습니다.")
     else:
         editable = pd.DataFrame(quote_source).drop(
-            columns=["_cols", "_rows", "_layers", "_unit"], errors="ignore")
+            columns=["_cols", "_rows", "_layers", "_unit",
+                     "_products_per_layer", "_total_layers"], errors="ignore")
         edited = st.data_editor(
             editable,
             width="stretch", hide_index=True, num_rows="fixed",
