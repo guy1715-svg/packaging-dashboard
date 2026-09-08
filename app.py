@@ -488,6 +488,19 @@ rows = build_packaging_rows(
 
 best_row = max(rows, key=lambda r: r["박스당 총 제품"]) if rows else None
 
+# 제품 사이즈·포장재 사양(지퍼백/트레이 규격 등)이 바뀌면 수동으로 고른 박스를 초기화하고
+# 새 추천 박스를 다시 따라가도록 시그니처로 추적 (같은 사양에서 고른 박스는 그대로 유지)
+if is_bag:
+    _pack_sig = ("bag", bag_name, bag_count)
+elif is_tray:
+    _pack_sig = ("tray", tray_l, tray_w, tray_thickness, tray_cells)
+else:
+    _pack_sig = ("bulk",)
+_calc_sig = (product, inner_mode, _pack_sig)
+if best_row and st.session_state.get("_calc_sig") != _calc_sig:
+    st.session_state["_calc_sig"] = _calc_sig
+    st.session_state["sel_box"] = best_row["박스명"]
+
 # 사용할 박스 선택(탭 간 공유) — session_state('sel_box')로 유지
 # (드롭다운/비교표 클릭 둘 다 이 값을 갱신 → 위젯 key 미사용, 수동 관리)
 _rowmap = {r["박스명"]: r for r in rows}
