@@ -1007,8 +1007,9 @@ elif view == VIEWS[2]:
 
     st.markdown("")
     section("보관 · 복원 (영구 저장)")
-    st.caption("⚠️ 클라우드는 재배포 시 기록이 초기화됩니다. 주기적으로 내려받아 보관하고, "
-               "필요 시 다시 올려 복원하세요.")
+    st.caption("Google Sheets가 연동되어 있으면 재배포해도 기록이 유지됩니다. "
+               "미연동 상태라면 클라우드 파일 시스템은 임시 저장소라 재배포 시 초기화되니 "
+               "주기적으로 내려받아 보관하세요.")
     b1, b2 = st.columns(2)
     b1.download_button("⬇️ 전체 기록 내려받기 (CSV)",
                        data=hist.to_csv(index=False).encode("utf-8-sig"),
@@ -1019,14 +1020,34 @@ elif view == VIEWS[2]:
     if up is not None:
         try:
             new = pd.read_csv(up)
-            merged = pd.concat([hist, new], ignore_index=True).drop_duplicates()
-            store.save_df(merged)
-            st.success(f"복원 완료 · 현재 {len(merged)}건")
+            missing = [c for c in store.COLUMNS if c not in new.columns]
+            if missing:
+                st.error(f"CSV 형식이 올바르지 않습니다. 누락된 열: {', '.join(missing)}")
+            else:
+                new = new[store.COLUMNS]
+                merged = pd.concat([hist, new], ignore_index=True).drop_duplicates()
+                store.save_df(merged)
+                st.success(f"복원 완료 · 현재 {len(merged)}건 (기존 {len(hist)}건 → "
+                           f"{len(merged) - len(hist)}건 추가 반영)")
         except Exception as e:
             st.error(f"CSV를 읽을 수 없습니다: {e}")
-    if not hist.empty and st.button("🗑️ 전체 기록 삭제", type="secondary"):
-        store.save_df(hist.iloc[0:0])
-        st.warning("모든 기록을 삭제했습니다.")
+
+    if not hist.empty:
+        if not st.session_state.get("confirm_delete_all"):
+            if st.button("🗑️ 전체 기록 삭제", type="secondary"):
+                st.session_state["confirm_delete_all"] = True
+                st.rerun()
+        else:
+            st.error(f"⚠️ 전체 {len(hist)}건을 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
+            cd1, cd2 = st.columns(2)
+            if cd1.button("✅ 삭제 확인", type="primary", width="stretch"):
+                store.save_df(hist.iloc[0:0])
+                st.session_state["confirm_delete_all"] = False
+                st.warning("모든 기록을 삭제했습니다.")
+                st.rerun()
+            if cd2.button("취소", width="stretch"):
+                st.session_state["confirm_delete_all"] = False
+                st.rerun()
 
 # --- 탭4: 기준 데이터 열람 + ⑦ 카탈로그 편집 ---
 else:
