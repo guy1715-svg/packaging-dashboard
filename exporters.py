@@ -8,7 +8,10 @@
 """
 
 import io
+import logging
 from datetime import date
+
+logger = logging.getLogger(__name__)
 
 # 견적서 표 헤더 베트남어 병기 (성우비나용) ------------------------------------
 VI_HEADERS = {
@@ -64,7 +67,7 @@ def to_excel_bytes(header_info, rows, logo_bytes=None, chart_png=None,
             img.width = min(img.width, 200)
             ws.add_image(img, "F1")
         except Exception:
-            pass
+            logger.exception("Excel 로고 이미지 삽입 실패 — 로고 없이 계속 진행합니다.")
 
     # --- 제목 ---
     ws["A1"] = "포장자재 견적 요청서 (Packaging Quotation Request)"
@@ -122,7 +125,7 @@ def to_excel_bytes(header_info, rows, logo_bytes=None, chart_png=None,
             cimg.height = min(cimg.height, 320)
             ws.add_image(cimg, f"A{note_row + 2}")
         except Exception:
-            pass
+            logger.exception("Excel 3D 배치도 이미지 삽입 실패 — 이미지 없이 계속 진행합니다.")
 
     return _wb_to_bytes(wb)
 
@@ -155,6 +158,8 @@ def to_pdf_bytes(header_info, rows, logo_bytes=None, chart_png=None,
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(font_name))
     except Exception:
+        logger.exception("한글 CID 폰트(%s) 등록 실패 — Helvetica로 대체(한글이 깨질 수 있음).",
+                          font_name)
         font_name = "Helvetica"  # 폰트 미가용 시 폴백
 
     buf = io.BytesIO()
@@ -181,7 +186,7 @@ def to_pdf_bytes(header_info, rows, logo_bytes=None, chart_png=None,
                                  kind="proportional"))
             elems.append(Spacer(1, 4))
         except Exception:
-            pass
+            logger.exception("PDF 로고 이미지 삽입 실패 — 로고 없이 계속 진행합니다.")
     elems += [Paragraph("포장자재 견적 요청서 (Packaging Quotation Request)", title_style),
               Spacer(1, 6)]
 
@@ -230,7 +235,7 @@ def to_pdf_bytes(header_info, rows, logo_bytes=None, chart_png=None,
             elems.append(RLImage(io.BytesIO(chart_png), width=110 * mm, height=82 * mm,
                                  kind="proportional"))
         except Exception:
-            pass
+            logger.exception("PDF 3D 배치도 이미지 삽입 실패 — 이미지 없이 계속 진행합니다.")
 
     doc.build(elems)
     buf.seek(0)

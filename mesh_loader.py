@@ -14,6 +14,9 @@ trimesh 미설치 시에도 앱이 죽지 않도록 안전하게 폴백합니다
 """
 
 import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED = ["stl", "obj", "ply", "glb", "off"]
 MAX_PREVIEW_FACES = 40000   # 미리보기 성능 상한 (초과 시 데시메이션 시도)
@@ -68,6 +71,7 @@ def load_mesh(data_bytes, filename):
         try:
             loaded = trimesh.load(io.BytesIO(data_bytes), file_type=ext)
         except Exception:
+            logger.exception("3D 파일 파싱 실패: %s (%s)", filename, ext)
             return None
 
     mesh = _to_single_mesh(loaded)
@@ -85,6 +89,7 @@ def load_mesh(data_bytes, filename):
     try:
         volume = float(mesh.volume) if mesh.is_watertight else 0.0
     except Exception:
+        logger.exception("부피 계산 실패: %s — 0으로 표시합니다.", filename)
         volume = 0.0
 
     # --- 미리보기용 지오메트리 (원점 기준 이동, 필요시 데시메이션) ---
@@ -94,7 +99,7 @@ def load_mesh(data_bytes, filename):
             prev = prev.simplify_quadric_decimation(MAX_PREVIEW_FACES)
             note = (note + " ").strip() + f"미리보기 면수를 {MAX_PREVIEW_FACES:,}개로 단순화했습니다."
         except Exception:
-            pass
+            logger.exception("미리보기 데시메이션 실패: %s — 원본 면수로 표시합니다.", filename)
 
     v = prev.vertices - prev.vertices.min(axis=0)   # 원점으로 이동
     verts = v.tolist()

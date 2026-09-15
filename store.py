@@ -25,16 +25,50 @@ Google Sheets 연동 실패(권한 오류, 네트워크 오류 등) 시에도 �
     update로 좁혀 동시 편집 시 서로 덮어쓸 위험을 최소화합니다.
   - 로컬 CSV는 파일 락(fcntl.flock)으로 읽기→수정→쓰기 구간을
     직렬화해 동시 저장 시 한쪽 기록이 유실되지 않게 합니다.
+
+캐싱
+-----------------------------------------------------
+Streamlit은 위젯 조작마다 스크립트 전체를 재실행하므로, 캐싱이 없으면
+load_df()/load_prices_df()가 상호작용마다 Google Sheets API를 호출하거나
+디스크에서 CSV를 다시 읽습니다. `st.cache_data(ttl=30)`로 캐싱하고,
+이 모듈로 데이터를 저장할 때마다 캐시를 즉시 비워(clear) 같은 세션
+안에서는 방금 저장한 내용이 바로 반영되도록 합니다. streamlit이 없는
+환경(예: pytest)에서는 캐싱 없이 그대로 동작합니다.
 """
 
 import contextlib
+import logging
 import os
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 try:
     import fcntl
 except ImportError:                                   # Windows 등 미지원 환경
     fcntl = None
+
+try:
+    import streamlit as st
+except ImportError:                                   # pytest 등 streamlit 미설치 환경
+    st = None
+
+
+def _cache_data(**kwargs):
+    """st.cache_data 래퍼. streamlit 미설치 시 캐싱 없이 원본 함수 그대로 사용."""
+    if st is None:
+        def _identity(fn):
+            fn.clear = lambda: None
+            return fn
+        return _identity
+    return st.cache_data(**kwargs)
+
+
+def _clear_cache(fn):
+    try:
+        fn.clear()
+    except Exception:
+        pass
 
 
 @contextlib.contextmanager
@@ -75,6 +109,7 @@ def _gsheet():
             return None
         return _open_gsheet(dict(st.secrets["gcp_service_account"]), st.secrets["gsheet_id"])
     except Exception:
+        logger.exception("Google Sheets 연결 실패 — 로컬 CSV로 폴백합니다.")
         return None
 
 
@@ -127,15 +162,20 @@ def _df_to_ws(ws, df, columns):
 # ---------------------------------------------------------------------------
 # 견적 이력 (records)
 # ---------------------------------------------------------------------------
+@_cache_data(ttl=30, show_spinner=False)
 def load_df():
-    """저장된 기록을 DataFrame으로 반환 (없으면 빈 표)."""
+    """저장된 기록을 DataFrame으로 반환 (없으면 빈 표).
+
+    30초간 캐시됩니다 — 이 모듈로 저장(save_df/append_record)하면
+    즉시 캐시를 비우므로 같은 세션에서는 바로 최신값이 보입니다.
+    """
     sh = _gsheet()
     if sh is not None:
         try:
             ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
             return _ws_to_df(ws, COLUMNS)
         except Exception:
-            pass
+            logger.exception("Google Sheets에서 기록을 읽지 못했습니다 — 로컬 CSV로 폴백합니다.")
     if os.path.exists(RECORDS_FILE):
         try:
             df = pd.read_csv(RECORDS_FILE)
@@ -144,7 +184,7 @@ def load_df():
                     df[c] = ""
             return df[COLUMNS].fillna("")     # 빈칸이 None/NaN으로 보이지 않게
         except Exception:
-            pass
+            logger.exception("%s 파일을 읽지 못했습니다 — 빈 기록으로 표시합니다.", RECORDS_FILE)
     return pd.DataFrame(columns=COLUMNS)
 
 
@@ -155,14 +195,17 @@ def save_df(df):
         try:
             ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
             _df_to_ws(ws, df, COLUMNS)
+            _clear_cache(load_df)
             return True
         except Exception:
-            pass
+            logger.exception("Google Sheets에 기록 저장 실패 — 로컬 CSV로 폴백합니다.")
     with _file_lock(RECORDS_FILE):
         try:
             df[COLUMNS].to_csv(RECORDS_FILE, index=False)
+            _clear_cache(load_df)
             return True
         except Exception:
+            logger.exception("%s 파일 저장 실패.", RECORDS_FILE)
             return False
 
 
@@ -178,16 +221,18 @@ def append_record(record: dict):
         try:
             ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
             ws.append_row([str(row[c]) for c in COLUMNS], value_input_option="RAW")
+            _clear_cache(load_df)
             return load_df()
         except Exception:
-            pass
+            logger.exception("Google Sheets에 기록 추가 실패 — 로컬 CSV로 폴백합니다.")
     with _file_lock(RECORDS_FILE):
         df = load_df()
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         try:
             df[COLUMNS].to_csv(RECORDS_FILE, index=False)
         except Exception:
-            pass
+            logger.exception("%s 파일에 기록 추가 실패.", RECORDS_FILE)
+    _clear_cache(load_df)
     return df
 
 
@@ -201,19 +246,21 @@ def load_prices():
             for _, r in df.iterrows() if str(r["박스명"])}
 
 
+@_cache_data(ttl=30, show_spinner=False)
 def load_prices_df():
+    """30초간 캐시됩니다 — save_price로 저장하면 즉시 캐시를 비웁니다."""
     sh = _gsheet()
     if sh is not None:
         try:
             ws = _get_or_create_ws(sh, PRICES_SHEET, PRICE_COLS)
             return _ws_to_df(ws, PRICE_COLS)
         except Exception:
-            pass
+            logger.exception("Google Sheets에서 단가를 읽지 못했습니다 — 로컬 CSV로 폴백합니다.")
     if os.path.exists(PRICES_FILE):
         try:
             return pd.read_csv(PRICES_FILE)[PRICE_COLS]
         except Exception:
-            pass
+            logger.exception("%s 파일을 읽지 못했습니다 — 빈 단가 목록으로 표시합니다.", PRICES_FILE)
     return pd.DataFrame(columns=PRICE_COLS)
 
 
@@ -237,9 +284,10 @@ def save_price(box_name, price, when=""):
                 ws.update(f"A{cell.row}:C{cell.row}", [values])
             else:
                 ws.append_row(values, value_input_option="RAW")
+            _clear_cache(load_prices_df)
             return True
         except Exception:
-            pass
+            logger.exception("Google Sheets에 단가 저장 실패 — 로컬 CSV로 폴백합니다.")
 
     with _file_lock(PRICES_FILE):
         df = load_prices_df()
@@ -248,8 +296,10 @@ def save_price(box_name, price, when=""):
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         try:
             df[PRICE_COLS].to_csv(PRICES_FILE, index=False)
+            _clear_cache(load_prices_df)
             return True
         except Exception:
+            logger.exception("%s 파일 저장 실패.", PRICES_FILE)
             return False
 
 
