@@ -17,10 +17,39 @@
 
 Google Sheets 연동 실패(권한 오류, 네트워크 오류 등) 시에도 앱이 죽지
 않도록 로컬 CSV로 안전하게 폴백합니다.
+
+동시 사용자 접근
+-----------------------------------------------------
+여러 사람이 동시에 기록을 저장하거나 단가를 입력할 수 있으므로:
+  - Google Sheets에서는 전체 표를 다시 쓰지 않고 append_row/행 단위
+    update로 좁혀 동시 편집 시 서로 덮어쓸 위험을 최소화합니다.
+  - 로컬 CSV는 파일 락(fcntl.flock)으로 읽기→수정→쓰기 구간을
+    직렬화해 동시 저장 시 한쪽 기록이 유실되지 않게 합니다.
 """
 
+import contextlib
 import os
 import pandas as pd
+
+try:
+    import fcntl
+except ImportError:                                   # Windows 등 미지원 환경
+    fcntl = None
+
+
+@contextlib.contextmanager
+def _file_lock(path):
+    """path에 대한 읽기-수정-쓰기 구간을 프로세스 간에 직렬화."""
+    if fcntl is None:
+        yield
+        return
+    lock_path = path + ".lock"
+    with open(lock_path, "a") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 RECORDS_FILE = "records.csv"
 PRICES_FILE = "box_prices.csv"
@@ -129,19 +158,36 @@ def save_df(df):
             return True
         except Exception:
             pass
-    try:
-        df[COLUMNS].to_csv(RECORDS_FILE, index=False)
-        return True
-    except Exception:
-        return False
+    with _file_lock(RECORDS_FILE):
+        try:
+            df[COLUMNS].to_csv(RECORDS_FILE, index=False)
+            return True
+        except Exception:
+            return False
 
 
 def append_record(record: dict):
-    """기록 1건 추가 후 저장. 반환: 갱신된 DataFrame."""
-    df = load_df()
+    """기록 1건 추가 후 저장. 반환: 갱신된 DataFrame.
+
+    Google Sheets에서는 전체 표를 다시 쓰지 않고 append_row로 한 행만
+    추가해, 다른 사용자가 동시에 저장한 기록을 덮어쓰지 않습니다.
+    """
     row = {c: record.get(c, "") for c in COLUMNS}
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    save_df(df)
+    sh = _gsheet()
+    if sh is not None:
+        try:
+            ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
+            ws.append_row([str(row[c]) for c in COLUMNS], value_input_option="RAW")
+            return load_df()
+        except Exception:
+            pass
+    with _file_lock(RECORDS_FILE):
+        df = load_df()
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        try:
+            df[COLUMNS].to_csv(RECORDS_FILE, index=False)
+        except Exception:
+            pass
     return df
 
 
@@ -172,25 +218,39 @@ def load_prices_df():
 
 
 def save_price(box_name, price, when=""):
-    """박스 확정단가 1건 갱신(있으면 덮어씀) 후 저장."""
-    df = load_prices_df()
-    df = df[df["박스명"].astype(str) != str(box_name)]      # 기존 항목 제거
-    row = {"박스명": box_name, "확정단가": price, "갱신일시": when}
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+    """박스 확정단가 1건 갱신(있으면 덮어씀) 후 저장.
 
+    Google Sheets에서는 해당 박스명 행만 찾아 갱신(없으면 추가)해,
+    다른 사용자가 동시에 입력한 다른 박스의 단가를 덮어쓰지 않습니다.
+    """
     sh = _gsheet()
     if sh is not None:
         try:
             ws = _get_or_create_ws(sh, PRICES_SHEET, PRICE_COLS)
-            _df_to_ws(ws, df, PRICE_COLS)
+            cell = None
+            try:
+                cell = ws.find(str(box_name), in_column=1)
+            except Exception:
+                cell = None
+            values = [str(box_name), str(price), str(when)]
+            if cell:
+                ws.update(f"A{cell.row}:C{cell.row}", [values])
+            else:
+                ws.append_row(values, value_input_option="RAW")
             return True
         except Exception:
             pass
-    try:
-        df[PRICE_COLS].to_csv(PRICES_FILE, index=False)
-        return True
-    except Exception:
-        return False
+
+    with _file_lock(PRICES_FILE):
+        df = load_prices_df()
+        df = df[df["박스명"].astype(str) != str(box_name)]      # 기존 항목 제거
+        row = {"박스명": box_name, "확정단가": price, "갱신일시": when}
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        try:
+            df[PRICE_COLS].to_csv(PRICES_FILE, index=False)
+            return True
+        except Exception:
+            return False
 
 
 def similar_records(df, dims, tol_ratio=0.15, tol_min=5.0):
