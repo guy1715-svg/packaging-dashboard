@@ -11,9 +11,13 @@
     메인     → 적재 효율 계산 결과 + 구매팀 전달용 표준 양식 + 다운로드
 """
 
+import logging
+
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
+
+logger = logging.getLogger(__name__)
 
 from data import (BOX_CATALOG, INNER_OPTIONS, OUTER_GROUPS,
                   BAG_GROUP, TRAY_GROUP, PALLETS, CONTAINERS, PART_LOOKUP)
@@ -323,6 +327,30 @@ with st.sidebar:
                        f"**{L}×{W}×{H} mm** 자동입력됨")
             if _mg.get("note"):
                 st.caption("ℹ️ " + _mg["note"])
+            _verts, _faces = _mg.get("verts"), _mg.get("faces")
+            if _verts and _faces:
+                _vx, _vy, _vz = zip(*_verts)
+                _fi, _fj, _fk = zip(*_faces)
+                _mesh_fig = go.Figure(data=[go.Mesh3d(
+                    x=_vx, y=_vy, z=_vz, i=_fi, j=_fj, k=_fk,
+                    color="#3987e5", opacity=0.95, flatshading=True,
+                    lighting=dict(ambient=0.55, diffuse=0.6, specular=0.25, roughness=0.6),
+                    lightposition=dict(x=200, y=200, z=300),
+                    hoverinfo="skip",
+                )])
+                _mesh_fig.update_layout(
+                    height=340, margin=dict(l=0, r=0, t=0, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    scene=dict(
+                        aspectmode="data",
+                        xaxis=dict(visible=False), yaxis=dict(visible=False),
+                        zaxis=dict(visible=False),
+                        bgcolor="rgba(0,0,0,0)",
+                    ),
+                )
+                st.caption("🧊 업로드한 3D 형상 미리보기 (드래그로 회전)")
+                st.plotly_chart(_mesh_fig, width="stretch",
+                                config={"displayModeBar": False})
 
     st.markdown("**제품 외경 (mm)**")
     c1, c2, c3 = st.columns(3)
@@ -895,6 +923,7 @@ elif view == VIEWS[1]:
                                       box_h=_pb["inner_h"])
                 chart_png = _fig.to_image(format="png", width=760, height=560, scale=2)
         except Exception:
+            logger.exception("견적서용 3D 배치도 PNG 생성 실패.")
             st.caption("⚠️ 3D 이미지 생성 실패(kaleido 미설치일 수 있음) — 이미지 없이 진행합니다.")
 
     st.markdown("##### 견적 항목  ·  구매팀이 **‘구매 확정 단가’** 열에 입력해 회신")
