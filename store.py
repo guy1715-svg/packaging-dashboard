@@ -2,38 +2,27 @@
 포장 사양 대시보드 - 기록 저장/조회 (History Store)
 =====================================================
 
-고객사 · 제품명 · 재원 · 포장 결과를 누적 저장하고,
-비슷한 사이즈의 과거 기록을 조회할 수 있게 합니다.
+고객사 · 제품명 · 재원 · 포장 결과를 로컬 CSV(records.csv / box_prices.csv)에
+누적 저장하고, 비슷한 사이즈의 과거 기록을 조회할 수 있게 합니다.
 
-저장소 우선순위
------------------------------------------------------
-  1) Google Sheets — Streamlit secrets에 아래 두 값이 설정되어 있으면 사용:
-       st.secrets["gcp_service_account"]  (서비스 계정 JSON 키, dict)
-       st.secrets["gsheet_id"]            (스프레드시트 ID)
-     Streamlit Cloud가 재배포/재시작되어도 데이터가 사라지지 않습니다.
-  2) 로컬 CSV(records.csv / box_prices.csv) — 위 secrets가 없을 때 폴백.
-     Streamlit Cloud는 파일 시스템이 임시(ephemeral)이므로 재배포 시
-     초기화됩니다. 로컬 개발/오프라인 실행용으로만 사용하세요.
-
-Google Sheets 연동 실패(권한 오류, 네트워크 오류 등) 시에도 앱이 죽지
-않도록 로컬 CSV로 안전하게 폴백합니다.
+⚠️ Streamlit Cloud는 파일 시스템이 임시(ephemeral)입니다. 앱을 재배포하거나
+재시작하면 이 CSV 파일들이 초기화됩니다. 영구 보관이 필요하면 대시보드의
+'전체 내려받기(CSV)' 버튼으로 주기적으로 백업하고, 필요 시 '업로드로 복원'
+기능으로 되살리세요.
 
 동시 사용자 접근
 -----------------------------------------------------
-여러 사람이 동시에 기록을 저장하거나 단가를 입력할 수 있으므로:
-  - Google Sheets에서는 전체 표를 다시 쓰지 않고 append_row/행 단위
-    update로 좁혀 동시 편집 시 서로 덮어쓸 위험을 최소화합니다.
-  - 로컬 CSV는 파일 락(fcntl.flock)으로 읽기→수정→쓰기 구간을
-    직렬화해 동시 저장 시 한쪽 기록이 유실되지 않게 합니다.
+여러 사람이 동시에 기록을 저장하거나 단가를 입력할 수 있으므로, 파일 락
+(fcntl.flock)으로 읽기→수정→쓰기 구간을 직렬화해 동시 저장 시 한쪽 기록이
+유실되지 않게 합니다.
 
 캐싱
 -----------------------------------------------------
 Streamlit은 위젯 조작마다 스크립트 전체를 재실행하므로, 캐싱이 없으면
-load_df()/load_prices_df()가 상호작용마다 Google Sheets API를 호출하거나
-디스크에서 CSV를 다시 읽습니다. `st.cache_data(ttl=30)`로 캐싱하고,
-이 모듈로 데이터를 저장할 때마다 캐시를 즉시 비워(clear) 같은 세션
-안에서는 방금 저장한 내용이 바로 반영되도록 합니다. streamlit이 없는
-환경(예: pytest)에서는 캐싱 없이 그대로 동작합니다.
+load_df()/load_prices_df()가 상호작용마다 디스크에서 CSV를 다시 읽습니다.
+`st.cache_data(ttl=30)`로 캐싱하고, 이 모듈로 데이터를 저장할 때마다 캐시를
+즉시 비워(clear) 같은 세션 안에서는 방금 저장한 내용이 바로 반영되도록
+합니다. streamlit이 없는 환경(예: pytest)에서는 캐싱 없이 그대로 동작합니다.
 """
 
 import contextlib
@@ -85,10 +74,9 @@ def _file_lock(path):
         finally:
             fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
+
 RECORDS_FILE = "records.csv"
 PRICES_FILE = "box_prices.csv"
-RECORDS_SHEET = "records"
-PRICES_SHEET = "box_prices"
 
 COLUMNS = ["저장일시", "고객사", "제품명", "L", "W", "H", "무게(g)",
            "추천 포장재", "추천 박스", "추천 수량",
@@ -96,67 +84,6 @@ COLUMNS = ["저장일시", "고객사", "제품명", "L", "W", "H", "무게(g)",
            "트레이재질", "트레이두께", "제작업체", "색상", "비고"]
 
 PRICE_COLS = ["박스명", "확정단가", "갱신일시"]
-
-
-# ---------------------------------------------------------------------------
-# Google Sheets 연결
-# ---------------------------------------------------------------------------
-def _gsheet():
-    """설정된 Google Sheets 스프레드시트 객체. 미설정/실패 시 None."""
-    try:
-        import streamlit as st
-        if "gcp_service_account" not in st.secrets or "gsheet_id" not in st.secrets:
-            return None
-        return _open_gsheet(dict(st.secrets["gcp_service_account"]), st.secrets["gsheet_id"])
-    except Exception:
-        logger.exception("Google Sheets 연결 실패 — 로컬 CSV로 폴백합니다.")
-        return None
-
-
-def _open_gsheet(sa_info, sheet_id):
-    import streamlit as st
-
-    @st.cache_resource(show_spinner=False)
-    def _client(sheet_id):
-        import gspread
-        from google.oauth2.service_account import Credentials
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_info(sa_info, scopes=scopes)
-        gc = gspread.authorize(creds)
-        return gc.open_by_key(sheet_id)
-
-    return _client(sheet_id)
-
-
-def _get_or_create_ws(sh, title, columns):
-    try:
-        ws = sh.worksheet(title)
-    except Exception:
-        ws = sh.add_worksheet(title=title, rows=1000, cols=max(len(columns), 10))
-        ws.update([columns])
-        return ws
-    header = ws.row_values(1)
-    if header != columns:
-        ws.update([columns])
-    return ws
-
-
-def _ws_to_df(ws, columns):
-    rows = ws.get_all_records()
-    if not rows:
-        return pd.DataFrame(columns=columns)
-    df = pd.DataFrame(rows)
-    for c in columns:
-        if c not in df.columns:
-            df[c] = ""
-    return df[columns].fillna("")
-
-
-def _df_to_ws(ws, df, columns):
-    df = df.reindex(columns=columns).fillna("")
-    values = [columns] + df.astype(str).values.tolist()
-    ws.clear()
-    ws.update(values)
 
 
 # ---------------------------------------------------------------------------
@@ -169,13 +96,6 @@ def load_df():
     30초간 캐시됩니다 — 이 모듈로 저장(save_df/append_record)하면
     즉시 캐시를 비우므로 같은 세션에서는 바로 최신값이 보입니다.
     """
-    sh = _gsheet()
-    if sh is not None:
-        try:
-            ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
-            return _ws_to_df(ws, COLUMNS)
-        except Exception:
-            logger.exception("Google Sheets에서 기록을 읽지 못했습니다 — 로컬 CSV로 폴백합니다.")
     if os.path.exists(RECORDS_FILE):
         try:
             df = pd.read_csv(RECORDS_FILE)
@@ -189,16 +109,7 @@ def load_df():
 
 
 def save_df(df):
-    """DataFrame을 저장소(Google Sheets 우선, 없으면 CSV)에 저장 (best-effort)."""
-    sh = _gsheet()
-    if sh is not None:
-        try:
-            ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
-            _df_to_ws(ws, df, COLUMNS)
-            _clear_cache(load_df)
-            return True
-        except Exception:
-            logger.exception("Google Sheets에 기록 저장 실패 — 로컬 CSV로 폴백합니다.")
+    """DataFrame을 CSV로 저장 (best-effort)."""
     with _file_lock(RECORDS_FILE):
         try:
             df[COLUMNS].to_csv(RECORDS_FILE, index=False)
@@ -210,21 +121,8 @@ def save_df(df):
 
 
 def append_record(record: dict):
-    """기록 1건 추가 후 저장. 반환: 갱신된 DataFrame.
-
-    Google Sheets에서는 전체 표를 다시 쓰지 않고 append_row로 한 행만
-    추가해, 다른 사용자가 동시에 저장한 기록을 덮어쓰지 않습니다.
-    """
+    """기록 1건 추가 후 저장. 반환: 갱신된 DataFrame."""
     row = {c: record.get(c, "") for c in COLUMNS}
-    sh = _gsheet()
-    if sh is not None:
-        try:
-            ws = _get_or_create_ws(sh, RECORDS_SHEET, COLUMNS)
-            ws.append_row([str(row[c]) for c in COLUMNS], value_input_option="RAW")
-            _clear_cache(load_df)
-            return load_df()
-        except Exception:
-            logger.exception("Google Sheets에 기록 추가 실패 — 로컬 CSV로 폴백합니다.")
     with _file_lock(RECORDS_FILE):
         df = load_df()
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
@@ -249,13 +147,6 @@ def load_prices():
 @_cache_data(ttl=30, show_spinner=False)
 def load_prices_df():
     """30초간 캐시됩니다 — save_price로 저장하면 즉시 캐시를 비웁니다."""
-    sh = _gsheet()
-    if sh is not None:
-        try:
-            ws = _get_or_create_ws(sh, PRICES_SHEET, PRICE_COLS)
-            return _ws_to_df(ws, PRICE_COLS)
-        except Exception:
-            logger.exception("Google Sheets에서 단가를 읽지 못했습니다 — 로컬 CSV로 폴백합니다.")
     if os.path.exists(PRICES_FILE):
         try:
             return pd.read_csv(PRICES_FILE)[PRICE_COLS]
@@ -265,30 +156,7 @@ def load_prices_df():
 
 
 def save_price(box_name, price, when=""):
-    """박스 확정단가 1건 갱신(있으면 덮어씀) 후 저장.
-
-    Google Sheets에서는 해당 박스명 행만 찾아 갱신(없으면 추가)해,
-    다른 사용자가 동시에 입력한 다른 박스의 단가를 덮어쓰지 않습니다.
-    """
-    sh = _gsheet()
-    if sh is not None:
-        try:
-            ws = _get_or_create_ws(sh, PRICES_SHEET, PRICE_COLS)
-            cell = None
-            try:
-                cell = ws.find(str(box_name), in_column=1)
-            except Exception:
-                cell = None
-            values = [str(box_name), str(price), str(when)]
-            if cell:
-                ws.update(f"A{cell.row}:C{cell.row}", [values])
-            else:
-                ws.append_row(values, value_input_option="RAW")
-            _clear_cache(load_prices_df)
-            return True
-        except Exception:
-            logger.exception("Google Sheets에 단가 저장 실패 — 로컬 CSV로 폴백합니다.")
-
+    """박스 확정단가 1건 갱신(있으면 덮어씀) 후 저장."""
     with _file_lock(PRICES_FILE):
         df = load_prices_df()
         df = df[df["박스명"].astype(str) != str(box_name)]      # 기존 항목 제거

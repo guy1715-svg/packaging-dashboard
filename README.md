@@ -40,35 +40,22 @@ n_H = ⌊박스내경_H ÷ 제품외경_H⌋
 견적 통화 환산     = 박스당 총원가 × 환율(fx_rate)
 ```
 
-## 구매 확정 단가 · 견적 이력 영구 저장 (Google Sheets 연동)
+## 구매 확정 단가 · 견적 이력 저장 (로컬 CSV)
 
-Streamlit Cloud는 파일 시스템이 임시(ephemeral)라서, 연동 없이는 앱을 재배포할 때마다
-`records.csv`/`box_prices.csv`가 초기화됩니다. Google Sheets를 연결하면 재배포해도
-데이터가 유지됩니다.
+`records.csv`(견적 이력)와 `box_prices.csv`(구매 확정 단가)에 저장됩니다.
 
-**설정 방법**
-1. Google Cloud Console에서 서비스 계정을 만들고 JSON 키를 발급받습니다 (Sheets API 활성화).
-2. Google Sheets에서 새 스프레드시트를 만들고, 위 서비스 계정 이메일을 **편집자**로 공유합니다.
-3. Streamlit Cloud 앱 설정(**Settings → Secrets**)에 아래 형식으로 입력합니다.
+⚠️ **Streamlit Cloud는 파일 시스템이 임시(ephemeral)입니다.** 앱을 재배포하거나
+컨테이너가 재시작되면 이 두 파일이 초기화되어 그동안 쌓인 기록이 사라집니다.
+사내 보안 정책상 외부 저장소(Google Sheets 등) 연동이 어려운 경우, 아래처럼
+**수동 백업을 습관화**하세요.
 
-   ```toml
-   gsheet_id = "스프레드시트 URL의 /d/와 /edit 사이 ID"
-
-   [gcp_service_account]
-   type = "service_account"
-   project_id = "..."
-   private_key_id = "..."
-   private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-   client_email = "...@....iam.gserviceaccount.com"
-   client_id = "..."
-   token_uri = "https://oauth2.googleapis.com/token"
-   ```
-
-4. 저장 후 앱을 재실행하면 `records`/`box_prices` 시트가 자동 생성되며 이후 모든 저장이
-   Google Sheets로 이루어집니다.
-
-secrets가 설정되어 있지 않으면 기존처럼 로컬 CSV(`records.csv`/`box_prices.csv`)로 자동
-폴백하므로, 로컬 개발 시에는 별도 설정 없이 그대로 실행할 수 있습니다.
+- **백업**: '📚 기록 관리' 탭 → '⬇️ 전체 기록 내려받기(CSV)'로 주기적으로(예: 매주) 내려받아
+  개인폴더/사내 공유폴더에 보관
+- **복원**: 같은 탭의 '⬆️ CSV 올려 복원/병합'으로 백업 파일을 다시 올리면 기존 기록과
+  합쳐서 복원됨
+- 장기적으로 데이터 유실 없이 운영하려면, Streamlit Cloud가 아닌 **사내 PC/서버에서
+  직접 `streamlit run app.py`로 상시 구동**하는 방식으로 전환하는 것을 권장합니다
+  (이 경우 로컬 디스크에 영구 저장되어 재배포로 인한 초기화 문제가 사라집니다).
 
 ## 데이터 관리 (수정 위치)
 

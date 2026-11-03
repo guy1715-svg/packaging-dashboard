@@ -1,7 +1,6 @@
 """
-store.py 회귀 테스트 (로컬 CSV 폴백 경로)
+store.py 회귀 테스트 (로컬 CSV 저장 경로)
 ============================================
-Google Sheets secrets가 없는 환경(= streamlit.secrets 미설정)에서
 로컬 CSV 저장/조회 로직이 올바르게 동작하는지 검증한다.
 
 각 테스트는 임시 디렉터리로 이동해 실행해, 실제 프로젝트의
@@ -23,9 +22,8 @@ import store
 
 @pytest.fixture(autouse=True)
 def _isolated_cwd(tmp_path, monkeypatch):
-    """각 테스트를 빈 임시 디렉터리에서 실행 (CSV 파일 격리) + gsheet 비활성화."""
+    """각 테스트를 빈 임시 디렉터리에서 실행 (CSV 파일 격리)."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(store, "_gsheet", lambda: None)
     yield
 
 
