@@ -23,6 +23,21 @@ VI_HEADERS = {
 }
 
 
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell_value(val):
+    """엑셀/CSV 수식 삽입(Formula Injection) 방지.
+
+    '=', '+', '-', '@'로 시작하는 문자열은 스프레드시트 프로그램이 수식으로
+    해석할 수 있으므로, 앞에 작은따옴표를 붙여 문자열로 고정한다.
+    (OWASP CSV Injection) 숫자·None 등 문자열이 아닌 값은 그대로 둔다.
+    """
+    if isinstance(val, str) and val.startswith(_FORMULA_TRIGGERS):
+        return "'" + val
+    return val
+
+
 def _col_label(col, bilingual):
     """열 이름 (병기 옵션이면 '한국어\\nTiếng Việt')."""
     if bilingual and col in VI_HEADERS:
@@ -77,7 +92,7 @@ def to_excel_bytes(header_info, rows, logo_bytes=None, chart_png=None,
     r = 3
     for k, v in header_info.items():
         ws.cell(row=r, column=1, value=k).font = Font(bold=True)
-        ws.cell(row=r, column=2, value=v)
+        ws.cell(row=r, column=2, value=_safe_cell_value(v))
         r += 1
 
     # --- 표 헤더 ---
@@ -99,7 +114,7 @@ def to_excel_bytes(header_info, rows, logo_bytes=None, chart_png=None,
     confirm_col_idx = columns.index("구매 확정 단가") + 1 if "구매 확정 단가" in columns else None
     for i, row in enumerate(rows, start=header_row + 1):
         for c, col in enumerate(columns, start=1):
-            val = row[col]
+            val = _safe_cell_value(row[col])
             cell = ws.cell(row=i, column=c, value=val)
             cell.alignment = center
             cell.border = border

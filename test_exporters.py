@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from openpyxl import load_workbook
 
-from exporters import to_excel_bytes, to_pdf_bytes, default_header_info
+from exporters import to_excel_bytes, to_pdf_bytes, default_header_info, _safe_cell_value
 
 HEADER = default_header_info("성우전자", "박스(Carton)", (50, 30, 15),
                              part_name="테스트부품", unit_weight_g=12.5,
@@ -73,3 +73,26 @@ def test_to_pdf_bytes_empty_rows_does_not_crash():
     data = to_pdf_bytes(HEADER, [])
     assert isinstance(data, bytes)
     assert data.startswith(b"%PDF")
+
+
+def test_safe_cell_value_neutralizes_formula_triggers():
+    assert _safe_cell_value("=1+1") == "'=1+1"
+    assert _safe_cell_value("+SUM(A1)") == "'+SUM(A1)"
+    assert _safe_cell_value("-1") == "'-1"
+    assert _safe_cell_value("@cmd") == "'@cmd"
+
+
+def test_safe_cell_value_leaves_normal_values_untouched():
+    assert _safe_cell_value("정상 비고") == "정상 비고"
+    assert _safe_cell_value(1600) == 1600
+    assert _safe_cell_value(None) is None
+
+
+def test_to_excel_bytes_neutralizes_formula_in_remarks():
+    rows = [dict(ROWS[0], **{"비고": "=HYPERLINK(\"http://evil\")"})]
+    data = to_excel_bytes(HEADER, rows)
+    wb = load_workbook(io.BytesIO(data))
+    ws = wb.active
+    values = [c.value for row in ws.iter_rows() for c in row if c.value]
+    assert any(str(v).startswith("'=HYPERLINK") for v in values)
+    assert not any(str(v) == "=HYPERLINK(\"http://evil\")" for v in values)

@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 .streamlit/secrets.toml
+
+# 고객사명 · 구매 확정 단가 등 민감 데이터 — 저장소에 올라가면 안 됨
+records.csv
+box_prices.csv
+*.lock
