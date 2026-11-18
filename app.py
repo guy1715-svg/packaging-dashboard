@@ -36,12 +36,12 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# 디자인 시스템 (검증된 다크 팔레트)
+# 디자인 시스템 (밝은 팔레트 · 원색 강조)
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css');
-:root{ --surface:#161b22; --border:#2a3140; --muted:#8b98a5; }
+:root{ --surface:#F2F5FA; --border:#D7DEE8; --muted:#4B5563; --accent:#0B5FFF; }
 .block-container{padding-top:1.4rem;padding-bottom:2.6rem;max-width:1200px;}
 h1{font-size:1.85rem !important;font-weight:800;}
 h1,h2,h3{letter-spacing:-.015em;}
@@ -77,11 +77,11 @@ div[role="radiogroup"]{gap:3px;background:var(--surface);
 [data-testid="stMain"] div[role="radiogroup"]{display:inline-flex;flex-wrap:wrap;}
 section[data-testid="stSidebar"] div[role="radiogroup"]{display:flex;flex-direction:column;}
 div[role="radiogroup"] > label{background:transparent;border:none;border-radius:9px;
-  padding:8px 16px;margin:0;cursor:pointer;color:var(--muted);font-weight:600;
+  padding:8px 16px;margin:0;cursor:pointer;color:var(--muted);font-weight:700;
   font-size:.9rem;text-align:center;transition:background .15s,color .15s;}
-div[role="radiogroup"] > label:hover{background:rgba(255,255,255,.045);}
+div[role="radiogroup"] > label:hover{background:rgba(11,95,255,.08);}
 div[role="radiogroup"] > label > div:first-child{display:none;}
-div[role="radiogroup"] > label:has(input:checked){background:#222b38;color:#eaf2fb;}
+div[role="radiogroup"] > label:has(input:checked){background:#E3ECFF;color:var(--accent);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -148,13 +148,13 @@ def _dim_labels(dx, dy, dz, box_l, box_w, box_h):
     xs, ys, zs, txt, col = [], [], [], [], []
     if box_l:
         xs.append(dx / 2); ys.append(-off); zs.append(0)
-        txt.append(f"↔ 가로 {box_l:g}mm"); col.append("#8fd0ff")
+        txt.append(f"↔ 가로 {box_l:g}mm"); col.append("#0B5FFF")
     if box_w:
         xs.append(-off); ys.append(dy / 2); zs.append(0)
-        txt.append(f"↔ 세로 {box_w:g}mm"); col.append("#8fd0ff")
+        txt.append(f"↔ 세로 {box_w:g}mm"); col.append("#0B5FFF")
     if box_h:
         xs.append(-off); ys.append(-off); zs.append(dz / 2)
-        txt.append(f"↕ 높이 {box_h:g}mm"); col.append("#6ff0c0")
+        txt.append(f"↕ 높이 {box_h:g}mm"); col.append("#13A454")
     return go.Scatter3d(x=xs, y=ys, z=zs, mode="text", text=txt,
                         textfont=dict(color=col, size=16, family="system-ui"),
                         hoverinfo="skip")
@@ -333,7 +333,7 @@ with st.sidebar:
                 _fi, _fj, _fk = zip(*_faces)
                 _mesh_fig = go.Figure(data=[go.Mesh3d(
                     x=_vx, y=_vy, z=_vz, i=_fi, j=_fj, k=_fk,
-                    color="#3987e5", opacity=0.95, flatshading=True,
+                    color="#0B5FFF", opacity=0.95, flatshading=True,
                     lighting=dict(ambient=0.55, diffuse=0.6, specular=0.25, roughness=0.6),
                     lightposition=dict(x=200, y=200, z=300),
                     hoverinfo="skip",
@@ -808,23 +808,23 @@ if view == VIEWS[0]:
             _bars = df[df["박스당 총 제품"] > 0]
             if not _bars.empty:
                 _sel_name = sel_row["박스명"]
-                _colors = ["#40d6a0" if n == _sel_name else "#39424f"
+                _colors = ["#13A454" if n == _sel_name else "#C7CFDA"
                            for n in _bars["박스명"]]
                 _cfig = go.Figure(go.Bar(
                     x=_bars["박스명"], y=_bars["박스당 총 제품"],
                     marker=dict(color=_colors, cornerradius=5, line=dict(width=0)),
                     text=_bars["박스당 총 제품"], texttemplate="%{text:,}",
-                    textposition="outside", textfont=dict(size=10, color="#aeb9c5"),
+                    textposition="outside", textfont=dict(size=10, color="#15181F"),
                     cliponaxis=False,
                     hovertemplate="%{x}<br>%{y:,}개<extra></extra>"))
                 _cfig.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     height=280, margin=dict(l=0, r=0, t=22, b=0), bargap=0.4,
-                    font=dict(color="#8b98a5", size=11, family="Inter, sans-serif"),
+                    font=dict(color="#4B5563", size=11, family="Inter, sans-serif"),
                     uniformtext=dict(minsize=8, mode="hide"),
                     yaxis=dict(visible=False, showgrid=False, zeroline=False),
                     xaxis=dict(type="category", showgrid=False, zeroline=False,
-                               showline=False, ticks="", color="#8b98a5",
+                               showline=False, ticks="", color="#4B5563",
                                tickfont=dict(size=10.5)))
                 st.plotly_chart(_cfig, width="stretch",
                                 config={"displayModeBar": False})
